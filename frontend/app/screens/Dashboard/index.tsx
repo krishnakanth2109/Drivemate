@@ -431,8 +431,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerIconButton: {
-    padding: 6,
-    marginLeft: -4,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#fafafa",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
   },
   brandContainer: {
     flexDirection: "row",
