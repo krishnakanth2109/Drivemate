@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -60,9 +61,7 @@ const RegisterScreen: React.FC = () => {
 
   // Animations
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
-  const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const isTransitioning = useRef(false);
 
   // Animate progress bar smoothly on step change
   useEffect(() => {
@@ -87,37 +86,31 @@ const RegisterScreen: React.FC = () => {
     };
   }, [currentStep, resendTimer]);
 
-  // Silky smooth step transition: quick fade-out -> state update -> slide & fade in
+  // Reliable, glitch-free step transition
   const triggerStepTransition = (nextStep: number, direction: "forward" | "back") => {
-    if (isTransitioning.current) return;
-    isTransitioning.current = true;
+    // 1. Immediately update step so UI renders with 0 delay and is always 100% visible
+    setCurrentStep(nextStep);
 
-    Animated.timing(fadeAnim, {
+    // 2. Dismiss keyboard to avoid layout glitches
+    Keyboard.dismiss();
+
+    // 3. Reset scroll position safely
+    if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === "function") {
+      try {
+        scrollViewRef.current.scrollTo({ y: 0, animated: false });
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    // 4. Subtle hardware-accelerated spring slide-in
+    slideAnim.setValue(direction === "forward" ? 22 : -22);
+    Animated.spring(slideAnim, {
       toValue: 0,
-      duration: 80,
+      tension: 110,
+      friction: 11,
       useNativeDriver: true,
-    }).start(() => {
-      setCurrentStep(nextStep);
-      slideAnim.setValue(direction === "forward" ? 18 : -18);
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        isTransitioning.current = false;
-      });
-    });
+    }).start();
   };
 
   const dispatchOtp = async () => {
@@ -269,16 +262,27 @@ const RegisterScreen: React.FC = () => {
             STEP {currentStep} OF {TOTAL_STEPS}
           </Text>
           <View style={styles.dotsRow}>
-            {Array.from({ length: TOTAL_STEPS }).map((_, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.miniDot,
-                  idx + 1 === currentStep && styles.miniDotActive,
-                  idx + 1 < currentStep && styles.miniDotCompleted,
-                ]}
-              />
-            ))}
+            {Array.from({ length: TOTAL_STEPS }).map((_, idx) => {
+              const stepNum = idx + 1;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => {
+                    if (stepNum < currentStep) {
+                      triggerStepTransition(stepNum, "back");
+                    }
+                  }}
+                  disabled={stepNum >= currentStep}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.miniDot,
+                    stepNum === currentStep && styles.miniDotActive,
+                    stepNum < currentStep && styles.miniDotCompleted,
+                  ]}
+                />
+              );
+            })}
           </View>
         </View>
 
@@ -311,7 +315,6 @@ const RegisterScreen: React.FC = () => {
         >
           <Animated.View
             style={{
-              opacity: fadeAnim,
               transform: [{ translateX: slideAnim }],
             }}
           >
@@ -337,6 +340,8 @@ const RegisterScreen: React.FC = () => {
                     placeholderTextColor="#a1a1aa"
                     value={fullName}
                     onChangeText={setFullName}
+                    returnKeyType="next"
+                    onSubmitEditing={handleNextStep}
                     onFocus={() => setFocusedField("name")}
                     onBlur={() => setFocusedField(null)}
                   />
@@ -369,6 +374,8 @@ const RegisterScreen: React.FC = () => {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="next"
+                    onSubmitEditing={handleNextStep}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
                   />
@@ -399,6 +406,8 @@ const RegisterScreen: React.FC = () => {
                     value={phoneNumber}
                     onChangeText={setPhoneNumber}
                     keyboardType="phone-pad"
+                    returnKeyType="next"
+                    onSubmitEditing={handleNextStep}
                     onFocus={() => setFocusedField("phone")}
                     onBlur={() => setFocusedField(null)}
                   />
@@ -434,6 +443,8 @@ const RegisterScreen: React.FC = () => {
                       onChangeText={setUsername}
                       autoCapitalize="none"
                       autoCorrect={false}
+                      returnKeyType="next"
+                      onSubmitEditing={handleNextStep}
                       onFocus={() => setFocusedField("handle")}
                       onBlur={() => setFocusedField(null)}
                     />
@@ -556,6 +567,7 @@ const RegisterScreen: React.FC = () => {
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      returnKeyType="next"
                       onFocus={() => setFocusedField("pass")}
                       onBlur={() => setFocusedField(null)}
                     />
@@ -584,6 +596,8 @@ const RegisterScreen: React.FC = () => {
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleNextStep}
                     onFocus={() => setFocusedField("confirmPass")}
                     onBlur={() => setFocusedField(null)}
                   />
