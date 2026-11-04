@@ -226,13 +226,9 @@ const RegisterScreen: React.FC = () => {
       setIsLoading(false);
 
       if (response.success) {
-        Alert.alert(
-          "Welcome to Drivemate!",
-          `Account verified for ${fullName}. You have 2 free community posts ready to use.`,
-          [{ text: "Start Driving", onPress: () => navigation.replace("Dashboard") }]
-        );
+        navigation.replace("Dashboard");
       } else {
-        Alert.alert("Verification Failed", response.error || "Unable to verify registration code.");
+        Alert.alert("Registration Failed", response.error || "Unable to complete registration.");
       }
     } catch (err: any) {
       setIsLoading(false);
