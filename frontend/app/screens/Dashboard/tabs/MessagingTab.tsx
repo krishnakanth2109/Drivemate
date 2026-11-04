@@ -47,6 +47,7 @@ const MessagingTab: React.FC = () => {
     async function fetchInitialMessages() {
       try {
         const res = await messagesAPI.getMessages("drivemate-hq");
+        console.log("💬 [MessagingTab fetchInitialMessages] Loaded messages:", res.messages?.length || 0, res.messages);
         if (isMounted && res.success && Array.isArray(res.messages)) {
           setMessages(res.messages);
         }
@@ -64,11 +65,13 @@ const MessagingTab: React.FC = () => {
     }
 
     socket.on("connect", () => {
+      console.log("💬 [MessagingTab Socket Connected] Joined room drivemate-hq");
       if (isMounted) setIsSocketConnected(true);
       socket.emit("join_room", "drivemate-hq");
     });
 
     socket.on("disconnect", () => {
+      console.log("💬 [MessagingTab Socket Disconnected]");
       if (isMounted) setIsSocketConnected(false);
     });
 
@@ -76,6 +79,7 @@ const MessagingTab: React.FC = () => {
 
     // 4. Real-time incoming message listener
     socket.on("new_message", (incoming: ChatMessage) => {
+      console.log("💬 [MessagingTab Live Message Received]", incoming);
       if (isMounted) {
         setMessages((prev) => {
           // Avoid duplicate messages if sender also added locally
@@ -119,6 +123,7 @@ const MessagingTab: React.FC = () => {
     };
 
     // Optimistic UI update
+    console.log("💬 [MessagingTab handleSendMessage] Dispatching chat message:", localMsg);
     setMessages((prev) => [...prev, localMsg]);
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });

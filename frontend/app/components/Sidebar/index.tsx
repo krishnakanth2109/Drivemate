@@ -4,9 +4,8 @@ import {
   Text,
   View,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Platform,
   ScrollView,
   Easing,
@@ -25,9 +24,6 @@ import {
   CreditCardIcon,
 } from "../Icons";
 import { TabKey } from "../BottomBar";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const SIDEBAR_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 320);
 
 interface SidebarProps {
   isOpen: boolean;
@@ -59,27 +55,40 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail = "alex@drivemate.com",
 }) => {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = Math.min((windowWidth || 360) * 0.82, 320);
+
   const [shouldRender, setShouldRender] = useState(isOpen);
-  const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+  const slideAnim = useRef(new Animated.Value(-320)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   // Sync open state with smooth slide & fade in
   useEffect(() => {
+    console.log("📑 [Sidebar State Change]", {
+      isOpen,
+      drawerWidth,
+      userName,
+      userEmail,
+      isProUser,
+      freePostsUsed,
+      singlePasses,
+    });
+
     if (isOpen) {
       setShouldRender(true);
-      slideAnim.setValue(-SIDEBAR_WIDTH);
+      slideAnim.setValue(-drawerWidth);
       opacityAnim.setValue(0);
 
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 240,
+          duration: 250,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
-          duration: 240,
+          duration: 250,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -87,29 +96,31 @@ const Sidebar: React.FC<SidebarProps> = ({
     } else if (shouldRender) {
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: -SIDEBAR_WIDTH,
-          duration: 200,
+          toValue: -drawerWidth,
+          duration: 220,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 0,
-          duration: 200,
+          duration: 220,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start(() => {
         setShouldRender(false);
+        console.log("📑 [Sidebar] Drawer collapsed and hidden");
       });
     }
-  }, [isOpen]);
+  }, [isOpen, drawerWidth]);
 
   // Smooth slide out and collapse handler
   const handleClose = useCallback(
     (callback?: () => void) => {
+      console.log("📑 [Sidebar] Closing drawer via action or backdrop");
       onClose();
       if (callback) {
-        setTimeout(callback, 210);
+        setTimeout(callback, 230);
       }
     },
     [onClose]
@@ -127,23 +138,27 @@ const Sidebar: React.FC<SidebarProps> = ({
       pointerEvents={isOpen ? "auto" : "none"}
     >
       {/* Backdrop: tapping outside the drawer smoothly collapses it */}
-      <TouchableWithoutFeedback onPress={() => handleClose()}>
-        <Animated.View
-          style={[
-            styles.backdrop,
-            {
-              opacity: opacityAnim,
-            },
-          ]}
+      <Animated.View
+        style={[
+          styles.backdrop,
+          {
+            opacity: opacityAnim,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => handleClose()}
         />
-      </TouchableWithoutFeedback>
+      </Animated.View>
 
       {/* Drawer Panel */}
       <Animated.View
         style={[
           styles.drawer,
           {
-            width: SIDEBAR_WIDTH,
+            width: drawerWidth,
             paddingTop: insets.top + (Platform.OS === "ios" ? 12 : 20),
             paddingBottom: Math.max(insets.bottom, 20),
             transform: [{ translateX: slideAnim }],

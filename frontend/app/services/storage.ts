@@ -27,9 +27,10 @@ export interface StoredUserProfile {
  */
 export async function saveAuthToken(token: string): Promise<void> {
   try {
+    console.log("💾 [Storage 🔑 saveAuthToken] Persisting token:", `${token.slice(0, 16)}...`);
     await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
   } catch (error) {
-    console.error("[Storage] Failed to save auth token:", error);
+    console.error("❌ [Storage] Failed to save auth token:", error);
   }
 }
 
@@ -38,9 +39,10 @@ export async function saveAuthToken(token: string): Promise<void> {
  */
 export async function getAuthToken(): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    return token;
   } catch (error) {
-    console.error("[Storage] Failed to get auth token:", error);
+    console.error("❌ [Storage] Failed to get auth token:", error);
     return null;
   }
 }
@@ -50,9 +52,10 @@ export async function getAuthToken(): Promise<string | null> {
  */
 export async function removeAuthToken(): Promise<void> {
   try {
+    console.log("💾 [Storage 🗑️ removeAuthToken] Cleared token");
     await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   } catch (error) {
-    console.error("[Storage] Failed to remove auth token:", error);
+    console.error("❌ [Storage] Failed to remove auth token:", error);
   }
 }
 
@@ -61,9 +64,16 @@ export async function removeAuthToken(): Promise<void> {
  */
 export async function saveUserProfile(profile: StoredUserProfile): Promise<void> {
   try {
+    console.log("💾 [Storage 👤 saveUserProfile] Caching profile:", {
+      fullName: profile.fullName,
+      email: profile.email,
+      isProUser: profile.isProUser,
+      freePostsUsed: profile.freePostsUsed,
+      singlePasses: profile.singlePasses,
+    });
     await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
   } catch (error) {
-    console.error("[Storage] Failed to save user profile:", error);
+    console.error("❌ [Storage] Failed to save user profile:", error);
   }
 }
 
@@ -73,9 +83,17 @@ export async function saveUserProfile(profile: StoredUserProfile): Promise<void>
 export async function getUserProfile(): Promise<StoredUserProfile | null> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed) {
+      console.log("💾 [Storage 👤 getUserProfile] Retrieved profile:", {
+        fullName: parsed.fullName,
+        email: parsed.email,
+        isProUser: parsed.isProUser,
+      });
+    }
+    return parsed;
   } catch (error) {
-    console.error("[Storage] Failed to get user profile:", error);
+    console.error("❌ [Storage] Failed to get user profile:", error);
     return null;
   }
 }
@@ -85,13 +103,14 @@ export async function getUserProfile(): Promise<StoredUserProfile | null> {
  */
 export async function clearAuthSession(): Promise<void> {
   try {
+    console.log("💾 [Storage 🧹 clearAuthSession] Purging auth session from storage");
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.AUTH_TOKEN,
       STORAGE_KEYS.USER_PROFILE,
       STORAGE_KEYS.POST_QUOTA,
     ]);
   } catch (error) {
-    console.error("[Storage] Failed to clear auth session:", error);
+    console.error("❌ [Storage] Failed to clear auth session:", error);
   }
 }
 

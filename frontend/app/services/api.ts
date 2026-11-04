@@ -97,8 +97,28 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     }
   }
 
+  const method = (options.method || "GET").toUpperCase();
+  let parsedBody: any = undefined;
+  if (rest.body && typeof rest.body === "string") {
+    try {
+      parsedBody = JSON.parse(rest.body);
+    } catch {
+      parsedBody = rest.body;
+    }
+  }
+
   const candidates = [activeBaseUrl, ...getCandidateBaseUrls().filter((u) => u !== activeBaseUrl)];
   let lastError: any = null;
+
+  console.log(`📡 [API 📤 OUTGOING] ${method} ${cleanEndpoint}`, {
+    method,
+    endpoint: cleanEndpoint,
+    requiresAuth,
+    payload: parsedBody,
+    activeHost: activeBaseUrl,
+  });
+
+  const startTime = Date.now();
 
   for (const candidateBase of candidates) {
     const targetUrl = `${candidateBase}${cleanEndpoint}`;
@@ -113,6 +133,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
       });
 
       clearTimeout(timeoutId);
+      const durationMs = Date.now() - startTime;
 
       // Successfully contacted server! Remember working base URL for subsequent calls
       activeBaseUrl = candidateBase;
@@ -120,6 +141,12 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        console.error(`❌ [API 📥 ERROR ${response.status}] ${method} ${cleanEndpoint} (${durationMs}ms):`, {
+          status: response.status,
+          targetUrl,
+          responseBody: data,
+        });
+
         return {
           success: false,
           error: data.error || `Server responded with status ${response.status}`,
@@ -127,23 +154,36 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
         };
       }
 
+      console.log(`✅ [API 📥 SUCCESS ${response.status}] ${method} ${cleanEndpoint} (${durationMs}ms):`, {
+        status: response.status,
+        url: targetUrl,
+        responseBody: data,
+      });
+
       return {
         success: true,
         ...data,
       };
     } catch (err: any) {
       lastError = err;
-      // Network failure on this candidate; loop to try next candidate IP
+      console.warn(`⚠️ [API 🔄 RETRY CANDIDATE] Candidate ${candidateBase} failed: ${err.message}. Trying next candidate...`);
       continue;
     }
   }
 
   if (lastError?.name === "AbortError") {
+    console.error(`💥 [API ⏱️ TIMEOUT] ${method} ${cleanEndpoint} timed out after 6000ms`);
     return {
       success: false,
       error: "Network request timed out. Please verify backend server is running on port 5000.",
     };
   }
+
+  console.error(`💥 [API 🚫 UNREACHABLE] Could not reach backend server on any candidate:`, {
+    endpoint: cleanEndpoint,
+    triedCandidates: candidates,
+    lastError: lastError?.message || lastError,
+  });
 
   return {
     success: false,

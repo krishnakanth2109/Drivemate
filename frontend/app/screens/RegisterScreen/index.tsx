@@ -89,6 +89,16 @@ const RegisterScreen: React.FC = () => {
 
   // Butter-smooth, zero-glitch step transition
   const triggerStepTransition = (nextStep: number, direction: "forward" | "back") => {
+    console.log(`📝 [RegisterScreen Step ${nextStep}/${TOTAL_STEPS}] Moving ${direction}:`, {
+      fullName,
+      email,
+      phoneNumber,
+      username,
+      vehicleType,
+      drivingStyle,
+      hasPassword: password.length >= 6,
+    });
+
     // 1. Immediately update step so UI renders with zero lag
     setCurrentStep(nextStep);
 
@@ -117,6 +127,10 @@ const RegisterScreen: React.FC = () => {
   };
 
   const dispatchOtp = async () => {
+    console.log("📲 [RegisterScreen dispatchOtp] Requesting 6-digit OTP code for:", {
+      email: email.trim(),
+      phoneNumber: phoneNumber.trim(),
+    });
     setIsSendingOtp(true);
     try {
       const res = await authAPI.sendOtp({
@@ -124,14 +138,16 @@ const RegisterScreen: React.FC = () => {
         phoneNumber: phoneNumber.trim(),
       });
       setIsSendingOtp(false);
+      console.log("📲 [RegisterScreen dispatchOtp] Response:", res);
       if (res.success) {
         if (res.devOtp) {
           setDevOtpCode(res.devOtp);
         }
         setResendTimer(60);
       }
-    } catch {
+    } catch (err) {
       setIsSendingOtp(false);
+      console.error("❌ [RegisterScreen dispatchOtp] Error:", err);
     }
   };
 
@@ -213,20 +229,25 @@ const RegisterScreen: React.FC = () => {
       return;
     }
 
+    const payload = {
+      fullName: fullName.trim(),
+      email: email.trim(),
+      phoneNumber: phoneNumber.trim(),
+      username: username.trim(),
+      vehicleType: vehicleType,
+      drivingStyle: drivingStyle,
+      password: password.trim(),
+      otp: cleanOtp,
+    };
+
+    console.log("📝 [RegisterScreen Complete] Submitting full registration payload:", payload);
+
     setIsLoading(true);
     try {
-      const response = await authAPI.register({
-        fullName: fullName.trim(),
-        email: email.trim(),
-        phoneNumber: phoneNumber.trim(),
-        username: username.trim(),
-        vehicleType: vehicleType,
-        drivingStyle: drivingStyle,
-        password: password.trim(),
-        otp: cleanOtp,
-      });
-
+      const response = await authAPI.register(payload);
       setIsLoading(false);
+
+      console.log("📝 [RegisterScreen Complete] Response:", response);
 
       if (response.success) {
         navigation.replace("Dashboard");
@@ -235,6 +256,7 @@ const RegisterScreen: React.FC = () => {
       }
     } catch (err: any) {
       setIsLoading(false);
+      console.error("❌ [RegisterScreen Complete] Registration Error:", err);
       Alert.alert("Error", err.message || "Failed to connect to verification server.");
     }
   };

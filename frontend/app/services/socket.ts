@@ -24,6 +24,14 @@ export function getSocket(): Socket {
       console.log("🔌 [Socket.io Client] Connected successfully with ID:", socket?.id);
     });
 
+    socket.onAny((event, ...args) => {
+      console.log(`🔌 [Socket.io 📥 ${event}] Payload:`, args.length === 1 ? args[0] : args);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("🔌 [Socket.io Client] Disconnected:", reason);
+    });
+
     socket.on("connect_error", (err) => {
       console.warn("🔌 [Socket.io Client] Connection note:", err.message);
     });

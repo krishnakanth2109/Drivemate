@@ -43,6 +43,19 @@ const HomeTab: React.FC<HomeTabProps> = ({
 }) => {
   const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
 
+  React.useEffect(() => {
+    console.log("🏠 [HomeTab Live Feed Data]", {
+      totalPosts: posts.length,
+      freeRemaining,
+      freePostsUsed,
+      maxFreePosts,
+      isProUser,
+      singlePasses,
+      userName,
+      posts,
+    });
+  }, [posts, freePostsUsed, isProUser, singlePasses, userName]);
+
   const handleOpenLink = (url?: string) => {
     if (!url) return;
     const formattedUrl =

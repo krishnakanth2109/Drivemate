@@ -52,6 +52,18 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const navigation = useNavigation<ProfileNavProp>();
   const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
 
+  React.useEffect(() => {
+    console.log("👤 [ProfileTab Data Displayed]", {
+      userName,
+      userEmail,
+      isProUser,
+      freePostsUsed,
+      maxFreePosts,
+      singlePasses,
+      totalPostsCreated,
+    });
+  }, [userName, userEmail, isProUser, freePostsUsed, maxFreePosts, singlePasses, totalPostsCreated]);
+
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}

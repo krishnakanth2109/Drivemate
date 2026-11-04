@@ -81,6 +81,13 @@ const Dashboard: React.FC = () => {
           setSinglePasses(billingRes.billing.singlePasses || 0);
         }
       } catch {}
+
+      console.log("📊 [Dashboard Data Loaded]", {
+        user: { fullName: stored?.fullName, email: stored?.email },
+        isProUser: stored?.isProUser,
+        freePostsUsed: stored?.freePostsUsed,
+        singlePasses: stored?.singlePasses,
+      });
     }
 
     loadData();
@@ -90,6 +97,7 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const handleToggleLike = async (id: string) => {
+    console.log("❤️ [Dashboard Like] Toggling like for post id:", id);
     // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
@@ -113,6 +121,7 @@ const Dashboard: React.FC = () => {
   const canPost = isProUser || singlePasses > 0 || freePostsUsed < MAX_FREE_POSTS;
 
   const handleOpenCreatePost = () => {
+    console.log("✍️ [Dashboard] Opening create post dialog. canPost:", canPost);
     if (!canPost) {
       setIsPaymentModalOpen(true);
     } else {
@@ -131,6 +140,7 @@ const Dashboard: React.FC = () => {
     linkTitle?: string;
     tag?: string;
   }) => {
+    console.log("🚀 [Dashboard Publish Post] Submitting payload:", postData);
     try {
       const res = await postsAPI.createPost(postData);
 
@@ -261,9 +271,12 @@ const Dashboard: React.FC = () => {
         <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.headerIconButton}
-            onPress={() => setIsSidebarOpen(true)}
+            onPress={() => {
+              console.log("🍔 [Dashboard] Toggling sidebar drawer. Current state:", isSidebarOpen);
+              setIsSidebarOpen((prev) => !prev);
+            }}
             activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
             <MenuIcon size={22} color="#09090b" />
           </TouchableOpacity>

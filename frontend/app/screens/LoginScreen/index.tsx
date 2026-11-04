@@ -20,7 +20,6 @@ import {
   MailIcon,
   LockIcon,
   GoogleLogo,
-  AppleLogo,
   CloseIcon,
   CheckCircleIcon,
   UserIcon,
@@ -44,6 +43,7 @@ const LoginScreen: React.FC = () => {
   const [isAuthenticatingGoogle, setIsAuthenticatingGoogle] = useState(false);
 
   const handleLogin = async () => {
+    console.log("🔐 [LoginScreen Input] Email:", email.trim(), "| Password length:", password.length);
     if (!email.trim() || !password.trim()) {
       Alert.alert("Missing Fields", "Please enter both email and password.");
       return;
@@ -51,8 +51,11 @@ const LoginScreen: React.FC = () => {
 
     setIsLoading(true);
     try {
+      console.log("🔐 [LoginScreen handleLogin] Dispatching login request for:", email.trim());
       const response = await authAPI.login(email.trim(), password.trim());
       setIsLoading(false);
+
+      console.log("🔐 [LoginScreen handleLogin] Server Response:", response);
 
       if (response.success) {
         navigation.replace("Dashboard");
@@ -61,11 +64,13 @@ const LoginScreen: React.FC = () => {
       }
     } catch (err: any) {
       setIsLoading(false);
+      console.error("❌ [LoginScreen handleLogin] Exception:", err);
       Alert.alert("Sign In Error", err.message || "Failed to connect to authentication server.");
     }
   };
 
   const executeGoogleLogin = async (targetEmail: string, displayName?: string) => {
+    console.log("🌐 [LoginScreen Google] Attempting Google login:", { targetEmail, displayName });
     if (!targetEmail.trim() || !targetEmail.includes("@")) {
       Alert.alert("Invalid Email", "Please enter a valid Google account email.");
       return;
@@ -81,6 +86,8 @@ const LoginScreen: React.FC = () => {
       setIsAuthenticatingGoogle(false);
       setIsGoogleModalOpen(false);
 
+      console.log("🌐 [LoginScreen Google] Server Response:", response);
+
       if (response.success) {
         navigation.replace("Dashboard");
       } else {
@@ -88,18 +95,14 @@ const LoginScreen: React.FC = () => {
       }
     } catch (err: any) {
       setIsAuthenticatingGoogle(false);
+      console.error("❌ [LoginScreen Google] Exception:", err);
       Alert.alert("Connection Error", err.message || "Failed to communicate with authentication server.");
     }
   };
 
-  const handleSocialAuth = (provider: string) => {
-    if (provider === "Google") {
-      setIsGoogleModalOpen(true);
-    } else {
-      Alert.alert(`${provider} Sign In`, `Connecting with ${provider}...`, [
-        { text: "Continue", onPress: () => navigation.replace("Dashboard") },
-      ]);
-    }
+  const handleOpenGoogleAuth = () => {
+    console.log("🌐 [LoginScreen] Opening Google authentication modal");
+    setIsGoogleModalOpen(true);
   };
 
   return (
@@ -219,26 +222,15 @@ const LoginScreen: React.FC = () => {
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Social Logins */}
-            <View style={styles.socialRow}>
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={() => handleSocialAuth("Google")}
-                activeOpacity={0.8}
-              >
-                <GoogleLogo size={18} />
-                <Text style={styles.socialButtonText}>Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={() => handleSocialAuth("Apple")}
-                activeOpacity={0.8}
-              >
-                <AppleLogo size={18} color="#09090b" />
-                <Text style={styles.socialButtonText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Minimalist Google Sign-In (Pure white theme, no Apple logo) */}
+            <TouchableOpacity
+              style={styles.googleFullButton}
+              onPress={handleOpenGoogleAuth}
+              activeOpacity={0.82}
+            >
+              <GoogleLogo size={20} />
+              <Text style={styles.googleFullButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Footer Link */}
@@ -502,26 +494,27 @@ const styles = StyleSheet.create({
     color: "#a1a1aa",
     fontWeight: "500",
   },
-  socialRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  socialButton: {
-    flex: 1,
+  googleFullButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    height: 50,
+    gap: 12,
+    height: 52,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#e4e4e7",
     borderRadius: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  socialButtonText: {
-    fontSize: 14,
+  googleFullButtonText: {
+    fontSize: 15,
     fontWeight: "600",
     color: "#09090b",
+    letterSpacing: -0.2,
   },
   footer: {
     flexDirection: "row",
