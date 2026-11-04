@@ -62,6 +62,7 @@ const RegisterScreen: React.FC = () => {
   // Animations
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   // Animate progress bar smoothly on step change
   useEffect(() => {
@@ -86,31 +87,33 @@ const RegisterScreen: React.FC = () => {
     };
   }, [currentStep, resendTimer]);
 
-  // Reliable, glitch-free step transition
+  // Butter-smooth, zero-glitch step transition
   const triggerStepTransition = (nextStep: number, direction: "forward" | "back") => {
-    // 1. Immediately update step so UI renders with 0 delay and is always 100% visible
+    // 1. Immediately update step so UI renders with zero lag
     setCurrentStep(nextStep);
 
-    // 2. Dismiss keyboard to avoid layout glitches
+    // 2. Dismiss keyboard smoothly
     Keyboard.dismiss();
 
-    // 3. Reset scroll position safely
-    if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === "function") {
-      try {
-        scrollViewRef.current.scrollTo({ y: 0, animated: false });
-      } catch {
-        // Safe fallback
-      }
-    }
+    // 3. Subtle vertical glide (8px) + gentle opacity ramp (0.85 -> 1.0)
+    // Never drops below 0.85 so screen is NEVER blank, zero horizontal wobble or spring jitter
+    slideAnim.setValue(direction === "forward" ? 8 : -8);
+    fadeAnim.setValue(0.85);
 
-    // 4. Subtle hardware-accelerated spring slide-in
-    slideAnim.setValue(direction === "forward" ? 22 : -22);
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      tension: 110,
-      friction: 11,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const dispatchOtp = async () => {
@@ -304,6 +307,7 @@ const RegisterScreen: React.FC = () => {
       >
         <ScrollView
           ref={scrollViewRef}
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -311,7 +315,8 @@ const RegisterScreen: React.FC = () => {
         >
           <Animated.View
             style={{
-              transform: [{ translateX: slideAnim }],
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
             }}
           >
             {/* STEP 1: FULL LEGAL NAME */}
@@ -704,54 +709,52 @@ const RegisterScreen: React.FC = () => {
                 </View>
               </View>
             )}
-
-            {/* Action Buttons inside the unified animated container */}
-            <View style={styles.actionSection}>
-              {currentStep < TOTAL_STEPS ? (
-                <TouchableOpacity
-                  style={styles.continueBtn}
-                  onPress={handleNextStep}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.continueBtnText}>Continue →</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[
-                    styles.continueBtn,
-                    (isLoading || otp.length < 6) && styles.continueBtnDisabled,
-                  ]}
-                  onPress={handleCompleteRegistrationWithOtp}
-                  disabled={isLoading || otp.length < 6}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.continueBtnText}>
-                    {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={styles.termsNotice}>
-                By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
-              </Text>
-
-              {currentStep === 1 && (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("Login")}
-                  style={{ marginTop: 14, alignItems: "center", paddingVertical: 4 }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 13, color: "#71717a", fontWeight: "500" }}>
-                    Already have an account?{" "}
-                    <Text style={{ color: "#09090b", fontWeight: "700" }}>
-                      Sign In
-                    </Text>
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
           </Animated.View>
         </ScrollView>
+
+        {/* Pinned Bottom Action Footer - Stays 100% Rock-Solid & Never Glitches */}
+        <View style={styles.bottomBar}>
+          {currentStep < TOTAL_STEPS ? (
+            <TouchableOpacity
+              style={styles.continueBtn}
+              onPress={handleNextStep}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.continueBtnText}>Continue →</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.continueBtn,
+                (isLoading || otp.length < 6) && styles.continueBtnDisabled,
+              ]}
+              onPress={handleCompleteRegistrationWithOtp}
+              disabled={isLoading || otp.length < 6}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.continueBtnText}>
+                {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {currentStep === 1 ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Login")}
+              style={styles.switchAuthBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.switchAuthText}>
+                Already have an account?{" "}
+                <Text style={styles.switchAuthTextBold}>Sign In</Text>
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.termsNotice}>
+              By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
+            </Text>
+          )}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -833,12 +836,15 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   stepCard: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   stepIconSquircle: {
     width: 52,
@@ -1038,15 +1044,19 @@ const styles = StyleSheet.create({
   otpInputContainer: {
     position: "relative",
     width: "100%",
+    height: 58,
     marginBottom: 16,
+    justifyContent: "center",
   },
   otpBoxesRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    width: "100%",
+    height: 58,
   },
   otpBox: {
     flex: 1,
-    height: 56,
+    height: 58,
     maxWidth: 48,
     borderRadius: 14,
     backgroundColor: "#fafafa",
@@ -1076,7 +1086,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    width: "100%",
+    height: 58,
     opacity: 0,
+    zIndex: 10,
     fontSize: 24,
   },
   resendContainer: {
@@ -1118,8 +1131,13 @@ const styles = StyleSheet.create({
     color: "#71717a",
     lineHeight: 18,
   },
-  actionSection: {
-    marginTop: 12,
+  bottomBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 16 : 20,
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#f4f4f5",
   },
   continueBtn: {
     backgroundColor: "#09090b",
@@ -1129,23 +1147,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 3,
   },
   continueBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   continueBtnText: {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: "700",
   },
+  switchAuthBtn: {
+    marginTop: 12,
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  switchAuthText: {
+    fontSize: 13,
+    color: "#71717a",
+    fontWeight: "500",
+  },
+  switchAuthTextBold: {
+    color: "#09090b",
+    fontWeight: "700",
+  },
   termsNotice: {
     fontSize: 11,
     color: "#a1a1aa",
     textAlign: "center",
-    marginTop: 14,
+    marginTop: 10,
     lineHeight: 16,
   },
 });
