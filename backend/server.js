@@ -157,6 +157,16 @@ app.use((err, req, res, next) => {
   });
 });
 
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [Port Conflict] Port ${PORT} is already in use by another process.`);
+    console.error(`👉 To free port ${PORT} on Windows, run:\n   Stop-Process -Id (Get-NetTCPConnection -LocalPort ${PORT} -ErrorAction SilentlyContinue).OwningProcess -Force\n`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`\n=================================================`);
   console.log(`🚀 DRIVEMATE SERVER RUNNING ON PORT ${PORT}`);
