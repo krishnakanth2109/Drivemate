@@ -1,0 +1,9 @@
+# Fastlane Match — encrypted certs live in private repo idp_ios-certificates
+# Optional override: set secret/env MATCH_GIT_URL to the full HTTPS git URL.
+
+_match_git = ENV["MATCH_GIT_URL"].to_s.strip
+git_url(_match_git.empty? ? "https://github.com/metalogyc/idp_ios-certificates.git" : _match_git)
+storage_mode("git")
+type("appstore")
+app_identifier(["com.xitara.mytdp"])
+team_id(ENV.fetch("FASTLANE_TEAM_ID", "GLHYLU9CB7"))

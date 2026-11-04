@@ -1,0 +1,10 @@
+<resources>
+  <string name="app_name">Drivemate</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">cover</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <!-- Meta / Facebook SDK (App Events / Ads measurement) -->
+  <string name="facebook_app_id">1826423865006816</string>
+  <string name="fb_login_protocol_scheme">fb1826423865006816</string>
+  <string name="facebook_client_token">7d2236292d7d06cf6e1c39278757801b</string>
+</resources>

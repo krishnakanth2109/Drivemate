@@ -1,0 +1,70 @@
+# --- From .gitignore (required: .easignore replaces .gitignore for EAS uploads) ---
+
+# dependencies
+node_modules/
+node_modules_bkp/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native signing / keys
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+ios/fastlane/.env
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# --- EAS Build: exclude local artifacts (not needed on EAS servers) ---
+
+# Android build outputs & caches
+android/app/build/
+android/build/
+android/.gradle/
+android/app/.cxx/
+android/local.properties
+*.apk
+*.aab
+
+# iOS build outputs & caches
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.xcuserstate
+*.xcuserdata/
+
+# Git & IDE (not needed for build)
+.git/
+.vscode/
+.claude/
+.api/
+
+# Local test / temp
+.tmp-bundle-test/
+coverage/
+*.log

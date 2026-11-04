@@ -1,0 +1,25 @@
+# Dependencies (modulus)
+node_modules/
+*/node_modules/
+
+# Environment Secrets
+.env
+.env.*
+*.env
+
+# Git & GitHub
+.git/
+.github/
+
+# Local async storage & tokens
+data/
+*.json.tmp
+config/serviceAccountKey.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

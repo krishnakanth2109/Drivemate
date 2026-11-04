@@ -1,0 +1,20 @@
+diff --git a/node_modules/react-native-reanimated/apple/reanimated/apple/REANodesManager.mm b/node_modules/react-native-reanimated/apple/reanimated/apple/REANodesManager.mm
+index 1111111..2222222 100644
+--- a/node_modules/react-native-reanimated/apple/reanimated/apple/REANodesManager.mm
++++ b/node_modules/react-native-reanimated/apple/reanimated/apple/REANodesManager.mm
+@@ -124,7 +124,14 @@
+ - (void)performOperations
+ {
+   RCTAssertMainQueue();
+-  _performOperations(); // calls ReanimatedModuleProxy::performOperations
++  // Guard: main-queue drain can race JS-queue registerPerformOperations: (#10135).
++  // Calling a nil block faults at 0x10 (Block_layout.invoke). Skip is harmless —
++  // pending updates flush on the next drain.
++  REAPerformOperations performOperations = _performOperations;
++  if (performOperations == nil) {
++    return;
++  }
++  performOperations(); // calls ReanimatedModuleProxy::performOperations
+ }
+ 
+ - (void)dispatchEvent:(id<RCTEvent>)event

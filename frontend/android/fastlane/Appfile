@@ -1,0 +1,3 @@
+# Play Console package name for MyTDP
+json_key_file(ENV["PLAY_STORE_JSON_KEY_PATH"]) if ENV["PLAY_STORE_JSON_KEY_PATH"] && !ENV["PLAY_STORE_JSON_KEY_PATH"].strip.empty?
+package_name("com.xitarabuild.mytdp")

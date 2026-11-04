@@ -1,0 +1,275 @@
+# Fastlane configuration for MyTDP iOS — Pods → Build → Archive → TestFlight
+# Run from ios/: bundle exec fastlane ios deploy_testflight
+#
+# Info.plist is the single source of truth for version (CFBundleShortVersionString)
+# and build number (CFBundleVersion). The sync_versions helper reads them and
+# propagates to project.pbxproj and app.json so everything stays in sync.
+# Version bumps are manual — CI does not increment build numbers.
+require "plist"
+require "json"
+require "base64"
+require "tempfile"
+require "yaml"
+
+default_platform(:ios)
+
+# ---------- helpers ----------
+
+def ios_dir
+  File.exist?("../Podfile") ? File.expand_path("..") : Dir.pwd
+end
+
+def ensure_node_binary!
+  return if ENV["NODE_BINARY"] && !ENV["NODE_BINARY"].strip.empty?
+
+  node_path = ""
+  begin
+    # Prefer a login shell so nvm/asdf/etc are loaded in CI.
+    node_path = sh("bash -lc 'command -v node'").to_s.strip
+  rescue
+    node_path = ""
+  end
+
+  if node_path.empty?
+    begin
+      node_path = sh("zsh -lc 'command -v node'").to_s.strip
+    rescue
+      node_path = ""
+    end
+  end
+
+  if node_path.empty?
+    UI.important("Could not detect node automatically. Set NODE_BINARY (e.g. export NODE_BINARY=$(which node)) and rerun.")
+  else
+    ENV["NODE_BINARY"] = node_path
+    UI.message("Using NODE_BINARY=#{ENV["NODE_BINARY"]}")
+  end
+end
+
+def sync_versions_from_info_plist
+  info_plist_path = File.join(ios_dir, "MyTDP", "Info.plist")
+  UI.user_error!("Info.plist not found at #{info_plist_path}") unless File.exist?(info_plist_path)
+
+  # Read as UTF-8 explicitly. Plist.parse_xml would otherwise open the file with
+  # Ruby's default external encoding; on a runner with no LANG that is US-ASCII,
+  # and the non-ASCII characters in Info.plist comments raise
+  # "invalid byte sequence in US-ASCII". StreamParser checks respond_to?(:read)
+  # first, so handing it a UTF-8 File keeps the encoding we opened with.
+  plist = File.open(info_plist_path, "r:UTF-8") { |f| Plist.parse_xml(f) }
+  version     = plist["CFBundleShortVersionString"]
+  build       = plist["CFBundleVersion"]
+  bundle_id   = "com.xitara.mytdp"
+
+  UI.message("Info.plist → version: #{version}, build: #{build}, bundleId: #{bundle_id}")
+
+  # --- Sync project.pbxproj ---
+  pbxproj_path = File.join(ios_dir, "MyTDP.xcodeproj", "project.pbxproj")
+  if File.exist?(pbxproj_path)
+    contents = File.read(pbxproj_path)
+    contents.gsub!(/MARKETING_VERSION = .*?;/, "MARKETING_VERSION = #{version};")
+    contents.gsub!(/CURRENT_PROJECT_VERSION = .*?;/, "CURRENT_PROJECT_VERSION = #{build};")
+    contents.gsub!(/PRODUCT_BUNDLE_IDENTIFIER = .*?;/, "PRODUCT_BUNDLE_IDENTIFIER = #{bundle_id};")
+    File.write(pbxproj_path, contents)
+    UI.success("project.pbxproj synced")
+  end
+
+  # --- Sync app.json ---
+  app_json_path = File.join(ios_dir, "..", "app.json")
+  if File.exist?(app_json_path)
+    app_json = JSON.parse(File.read(app_json_path))
+    ios_config = app_json.dig("expo", "ios") || {}
+    ios_config["version"]          = version
+    ios_config["buildNumber"]      = build
+    ios_config["bundleIdentifier"] = bundle_id
+    app_json["expo"]["ios"] = ios_config
+    app_json["expo"]["version"] = version
+    File.write(app_json_path, JSON.pretty_generate(app_json) + "\n")
+    UI.success("app.json synced")
+  end
+end
+
+def ensure_asc_api_key_filepath!
+  # Fastlane chdirs before the lane body runs, so a relative path (the natural thing
+  # to write in fastlane/.env, e.g. "./fastlane/AuthKey_XXXX.p8") no longer resolves
+  # from the CWD and this method would fall through to the "key is missing" error
+  # even though the file is right there. Anchor relative paths to ios_dir.
+  configured = ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"].to_s.strip
+  unless configured.empty?
+    resolved = configured.start_with?("/") ? configured : File.expand_path(configured, ios_dir)
+    if File.exist?(resolved)
+      ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"] = resolved
+      return
+    end
+    UI.important("ASC API key not found at #{resolved} (from #{configured}) — falling back to APP_STORE_CONNECT_API_KEY_KEY")
+  end
+
+  key_body = ENV["APP_STORE_CONNECT_API_KEY_KEY"].to_s
+  UI.user_error!("Set APP_STORE_CONNECT_API_KEY_KEY_FILEPATH or APP_STORE_CONNECT_API_KEY_KEY") if key_body.strip.empty?
+
+  # Accept raw .p8 or base64-encoded .p8 from CI secrets
+  pem = key_body.include?("BEGIN PRIVATE KEY") ? key_body : Base64.decode64(key_body)
+  path = File.join(Dir.tmpdir, "AuthKey_ci.p8")
+  File.write(path, pem)
+  ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"] = path
+  UI.message("Wrote ASC API key to #{path}")
+end
+
+def load_asc_api_key
+  ensure_asc_api_key_filepath!
+  app_store_connect_api_key(
+    key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
+    issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+    key_filepath: ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"],
+    duration: 1200,
+    in_house: false
+  )
+end
+
+def match_git_url
+  from_env = ENV["MATCH_GIT_URL"].to_s.strip
+  from_env.empty? ? "https://github.com/metalogyc/idp_ios-certificates.git" : from_env
+end
+
+FIREBASE_PODS = %w[
+  Firebase FirebaseAnalytics FirebaseCore FirebaseCoreExtension FirebaseCoreInternal
+  FirebaseCrashlytics FirebaseInstallations FirebaseMessaging FirebaseSessions
+  FirebaseRemoteConfigInterop GoogleAppMeasurement
+].freeze
+
+def local_pod_names
+  lock = File.join(ios_dir, "Podfile.lock")
+  return [] unless File.exist?(lock)
+  (YAML.load_file(lock)["EXTERNAL SOURCES"] || {}).keys
+end
+
+def running_on_ci?
+  ENV["CI"].to_s == "true" || ENV["GITHUB_ACTIONS"].to_s == "true"
+end
+
+def setup_ci_signing!(api_key)
+  return unless running_on_ci?
+
+  # Empty MATCH_GIT_URL (common when the optional secret is unset) makes Match
+  # clone '' because Ruby "" is truthy and overrides Matchfile.
+  ENV.delete("MATCH_GIT_URL") if ENV["MATCH_GIT_URL"].to_s.strip.empty?
+
+  # Creates / unlocks a temp keychain and configures Match for CI.
+  setup_ci(force: true)
+
+  auth = ENV["MATCH_GIT_BASIC_AUTHORIZATION"].to_s.strip
+  UI.user_error!("MATCH_GIT_BASIC_AUTHORIZATION secret is missing") if auth.empty?
+
+  UI.message("CI detected — syncing App Store certs via Match (readonly)")
+  UI.message("Match git_url=#{match_git_url}")
+  match(
+    type: "appstore",
+    readonly: true,
+    api_key: api_key,
+    app_identifier: "com.xitara.mytdp",
+    git_url: match_git_url,
+    git_basic_authorization: auth,
+    shallow_clone: true
+  )
+
+  # Project defaults to "iPhone Developer" — force App Store / Distribution for archive.
+  profile_name = ENV["sigh_com.xitara.mytdp_appstore_profile-name"]
+  UI.user_error!("Match did not set sigh_com.xitara.mytdp_appstore_profile-name") if profile_name.to_s.strip.empty?
+
+  update_code_signing_settings(
+    use_automatic_signing: false,
+    path: File.join(ios_dir, "MyTDP.xcodeproj"),
+    team_id: ENV.fetch("FASTLANE_TEAM_ID", "GLHYLU9CB7"),
+    code_sign_identity: "Apple Distribution",
+    profile_name: profile_name,
+    bundle_identifier: "com.xitara.mytdp",
+    targets: ["MyTDP"]
+  )
+end
+
+def gym_ipa_options
+  profile_name = ENV["sigh_com.xitara.mytdp_appstore_profile-name"]
+  opts = {
+    workspace: "MyTDP.xcworkspace",
+    scheme: "MyTDP",
+    export_method: "app-store",
+    output_directory: "./build",
+    output_name: "MyTDP.ipa",
+    clean: true,
+    skip_codesigning: false,
+    disable_xcpretty: true,
+    xcargs: "NODE_BINARY=#{ENV["NODE_BINARY"]}"
+  }
+
+  if running_on_ci? && !profile_name.to_s.strip.empty?
+    # Signing for MyTDP only is set via update_code_signing_settings.
+    # Do NOT pass PROVISIONING_PROFILE_SPECIFIER / CODE_SIGN_STYLE via xcargs —
+    # xcodebuild applies those to every target and CocoaPods libs reject them.
+    opts[:export_options] = {
+      method: "app-store",
+      provisioningProfiles: {
+        "com.xitara.mytdp" => profile_name
+      },
+      signingStyle: "manual",
+      signingCertificate: "Apple Distribution",
+      teamID: ENV.fetch("FASTLANE_TEAM_ID", "GLHYLU9CB7")
+    }
+    opts[:xcargs] = "NODE_BINARY=#{ENV["NODE_BINARY"]}"
+  end
+
+  opts
+end
+
+# ---------- lanes ----------
+
+platform :ios do
+  before_all do
+    UI.user_error!("Run this from ios folder") unless File.exist?("../Podfile") || File.exist?("Podfile")
+    sync_versions_from_info_plist
+    ensure_node_binary!
+  end
+
+  # node_modules is the source of truth for every :path pod and for the Firebase SDK version
+  # (read from @react-native-firebase/app by the Podfile), so a committed Podfile.lock that
+  # drifted from it (other Expo SDK, RNFB bump) is regenerated instead of failing the lane.
+  lane :pods do
+    ENV["LANG"] = ENV["LC_ALL"] = "en_US.UTF-8"
+    Dir.chdir(ios_dir) do
+      unlock = (local_pod_names + FIREBASE_PODS).uniq.join(" ")
+      attempts = [
+        "pod install",
+        "pod install --repo-update",   # stale CDN index / flaky network
+        "pod update #{unlock}",        # lock drifted from node_modules
+        # ponytail: last resort unlocks every remote pod too (floats to newest allowed by podspecs).
+        "pod update"
+      ]
+      attempts.each_with_index do |cmd, i|
+        begin
+          sh(cmd)
+          break
+        rescue => e
+          raise if i == attempts.size - 1
+          UI.important("`#{cmd}` failed (#{e.message.lines.first&.strip}) — retrying with `#{attempts[i + 1][0, 80]}`")
+        end
+      end
+    end
+  end
+
+  lane :build do
+    api_key = load_asc_api_key
+    setup_ci_signing!(api_key)
+    pods
+    build_app(gym_ipa_options)
+  end
+
+  lane :deploy_testflight do
+    api_key = load_asc_api_key
+    setup_ci_signing!(api_key)
+    pods
+    build_app(gym_ipa_options)
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+end

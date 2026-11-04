@@ -1,0 +1,94 @@
+# Fastlane Android — bundleRelease AAB → Play production (send for review; Managed Publishing for go-live)
+# Run from android/: bundle exec fastlane deploy_play_production
+#
+# Version bumps are manual (versionCode / versionName in app/build.gradle) before CI.
+
+default_platform(:android)
+
+def android_dir
+  File.exist?("app/build.gradle") ? Dir.pwd : File.expand_path("..")
+end
+
+def release_aab_path
+  candidates = Dir[File.join(android_dir, "app/build/outputs/bundle/release/*.aab")]
+  UI.user_error!("No AAB found under app/build/outputs/bundle/release/") if candidates.empty?
+  candidates.max_by { |p| File.mtime(p) }
+end
+
+# Play Console naming used by prior releases: "204 (7.0.1)" — code first, name in parentheses.
+def play_release_name
+  gradle_file = File.join(android_dir, "app/build.gradle")
+  contents = File.read(gradle_file)
+  code = contents[/^\s*versionCode\s+(\d+)/, 1]
+  name = contents[/^\s*versionName\s+"([^"]+)"/, 1]
+  UI.user_error!("Could not read versionCode/versionName from app/build.gradle") if code.to_s.empty? || name.to_s.empty?
+  "#{code} (#{name})"
+end
+
+def upload_signing_properties
+  %w[
+    MYAPP_UPLOAD_STORE_FILE
+    MYAPP_UPLOAD_STORE_PASSWORD
+    MYAPP_UPLOAD_KEY_ALIAS
+    MYAPP_UPLOAD_KEY_PASSWORD
+  ].each do |key|
+    UI.user_error!("Missing env #{key} for release signing") if ENV[key].to_s.strip.empty?
+  end
+
+  props = {
+    "MYAPP_UPLOAD_STORE_FILE" => ENV["MYAPP_UPLOAD_STORE_FILE"],
+    "MYAPP_UPLOAD_STORE_PASSWORD" => ENV["MYAPP_UPLOAD_STORE_PASSWORD"],
+    "MYAPP_UPLOAD_KEY_ALIAS" => ENV["MYAPP_UPLOAD_KEY_ALIAS"],
+    "MYAPP_UPLOAD_KEY_PASSWORD" => ENV["MYAPP_UPLOAD_KEY_PASSWORD"]
+  }
+
+  # Optional CI override (ORG_GRADLE_PROJECT_reactNativeArchitectures / env).
+  arch = ENV["ORG_GRADLE_PROJECT_reactNativeArchitectures"].to_s.strip
+  arch = ENV["REACT_NATIVE_ARCHITECTURES"].to_s.strip if arch.empty?
+  props["reactNativeArchitectures"] = arch unless arch.empty?
+
+  props
+end
+
+platform :android do
+  desc "Build signed release AAB (bundleRelease)"
+  lane :build_aab do
+    # CI: avoid Gradle fileHashes / VFS races that abort mergeReleaseNativeLibs
+    # with UncheckedIOException on fileHashes.bin (common on 2-core runners).
+    ci = ENV["CI"].to_s == "true" || ENV["GITHUB_ACTIONS"].to_s == "true"
+    opts = {
+      task: "bundle",
+      build_type: "Release",
+      project_dir: android_dir,
+      properties: upload_signing_properties,
+      print_command_output: true
+    }
+    opts[:flags] = "--no-build-cache --no-configuration-cache" if ci
+    gradle(opts)
+    UI.success("AAB: #{release_aab_path}")
+  end
+
+  desc "Build AAB and upload to Play production (send for review)"
+  lane :deploy_play_production do
+    build_aab
+
+    json_key = ENV["PLAY_STORE_JSON_KEY_PATH"].to_s.strip
+    UI.user_error!("Set PLAY_STORE_JSON_KEY_PATH to the service account JSON file") if json_key.empty?
+    UI.user_error!("Play JSON not found: #{json_key}") unless File.exist?(json_key)
+
+    name = play_release_name
+    UI.message("Play release name: #{name}")
+    upload_to_play_store(
+      package_name: "com.xitarabuild.mytdp",
+      track: "production",
+      aab: release_aab_path,
+      json_key: json_key,
+      version_name: name,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+      changes_not_sent_for_review: false
+    )
+  end
+end

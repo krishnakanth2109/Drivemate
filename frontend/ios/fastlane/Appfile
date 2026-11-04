@@ -1,0 +1,6 @@
+# App Store Connect / Apple ID configuration
+# Prefer env vars in CI. Team ID defaults to the live MyTDP team.
+
+app_identifier("com.xitara.mytdp")
+apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"] && !ENV["FASTLANE_APPLE_ID"].strip.empty?
+team_id(ENV.fetch("FASTLANE_TEAM_ID", "GLHYLU9CB7"))

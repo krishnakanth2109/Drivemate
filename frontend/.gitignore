@@ -1,0 +1,58 @@
+# dependencies (modulus)
+node_modules/
+node_modules_bkp/
+
+# Git & GitHub
+.git/
+.github/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+android/app/build/
+android/build/
+android/.gradle/
+android/app/.cxx/
+android/local.properties
+ios/build/
+ios/Pods/
+ios/DerivedData/
+*.apk
+*.aab
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# Environment Secrets
+.env
+.env.*
+.env*.local
+ios/fastlane/.env
+
+# typescript
+*.tsbuildinfo
+
+app-example
+.tmp-aab-analyze
+.tmp-apk-analyze
+.cursor/

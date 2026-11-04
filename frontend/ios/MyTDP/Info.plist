@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Drivemate</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>7.0.8</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>drivemate</string>
+				<string>com.drivemate.app</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>exp+drivemate</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>241</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3835706875603796~4713503686</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>fb</string>
+		<string>fbauth2</string>
+		<string>fbapi</string>
+		<string>fbshareextension</string>
+	</array>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_expo._tcp</string>
+		<string>_http._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Drivemate uses the camera to capture selfie photos for user profile verification and to scan QR codes for program attendance tracking. For example, when you attend a program event, you can scan a QR code to mark your attendance, or upload a selfie photo to verify your identity for membership purposes.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Drivemate needs access to your contacts so you can refer friends and earn rewards from the Refer &amp; Earn feature.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Drivemate needs local network access during development to connect to the Metro bundler on your Mac.</string>
+	<!-- TEMP Play Store: background location disabled — restore Always keys + UIBackgroundModes location when re-enabling bus trip. -->
+	<!--
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Drivemate uses your location to track your participation in door-to-door (DTD) campaigns and verify your attendance at program events. For example, when you participate in a DTD campaign, the app records your location to ensure you're visiting the correct addresses and to track campaign progress.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Drivemate uses your location to track your participation in door-to-door (DTD) campaigns and verify your attendance at program events. For example, when you participate in a DTD campaign, the app records your location to ensure you're visiting the correct addresses and to track campaign progress.</string>
+	-->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Drivemate uses your location to track your participation in door-to-door (DTD) campaigns and verify your attendance at program events. For example, when you participate in a DTD campaign, the app records your location to ensure you're visiting the correct addresses and to track campaign progress.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Drivemate needs microphone access to record your voice for meal logging.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Drivemate needs speech recognition to transcribe your voice for meal logging.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Drivemate may access motion and activity data to support optional health and fitness features, device orientation, and activity-related program tools. For example, integrated wellness features may use motion data only when you choose to use those services.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Drivemate saves photos to your device's photo library when you download membership cards, event photos, or other content from the app. For example, when you download your digital membership card, it will be saved to your Photos app for easy access.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Drivemate accesses your photo library to allow you to select and upload photos for your profile, share content, or attach images to program activities. For example, you can select photos from your library to upload as profile pictures or share event photos with other members.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
+	</array>
+	<key>RCTNewArchEnabled</key>
+	<true/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>SFProText-Bold.ttf</string>
+		<string>SFProText-Medium.ttf</string>
+		<string>SFProText-Regular.ttf</string>
+		<string>SFProText-Semibold.ttf</string>
+		<string>Poppins-Bold.ttf</string>
+		<string>Poppins-Light.ttf</string>
+		<string>Poppins-SemiBold.ttf</string>
+		<string>Poppins-Medium.ttf</string>
+		<string>Poppins-Regular.ttf</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>SplashScreen</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<false/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Automatic</string>
+	<!-- TEMP Play Store / App Store: background location mode disabled with bus trip. -->
+	<!--
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	-->
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+</dict>
+</plist>

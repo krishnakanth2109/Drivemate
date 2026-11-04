@@ -1,0 +1,22 @@
+{
+  "name": "drivemate-backend",
+  "version": "1.0.0",
+  "description": "Drivemate Firebase Authentication and Telematics Backend",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test-suite.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "firebase-admin": "^13.1.0",
+    "ioredis": "^6.0.0",
+    "mongoose": "^9.11.4",
+    "morgan": "^1.10.0",
+    "socket.io": "^4.8.4"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "Drivemate",
+    "slug": "drivemate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/App_icon.png",
+    "scheme": "drivemate",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ],
+        "NSLocalNetworkUsageDescription": "Drivemate needs local network access during development to connect to the Metro bundler.",
+        "NSBonjourServices": [
+          "_expo._tcp",
+          "_http._tcp"
+        ]
+      },
+      "bundleIdentifier": "com.drivemate.app",
+      "version": "1.0.0",
+      "buildNumber": "1"
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/App_icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.INTERNET"
+      ],
+      "package": "com.drivemate.app"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/SplashScreen1.jpg",
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "width": "100%",
+          "height": "100%"
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/SanFranciscoProText/SFProText-Bold.ttf",
+            "./assets/fonts/SanFranciscoProText/SFProText-Medium.ttf",
+            "./assets/fonts/SanFranciscoProText/SFProText-Regular.ttf",
+            "./assets/fonts/SanFranciscoProText/SFProText-Semibold.ttf",
+            "./assets/fonts/poppins/Poppins-Bold.ttf",
+            "./assets/fonts/poppins/Poppins-Light.ttf",
+            "./assets/fonts/poppins/Poppins-SemiBold.ttf",
+            "./assets/fonts/poppins/Poppins-Medium.ttf",
+            "./assets/fonts/poppins/Poppins-Regular.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "usesCleartextTraffic": true,
+            "supportsPageSizes16KB": true
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}

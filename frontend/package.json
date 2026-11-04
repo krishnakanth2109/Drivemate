@@ -1,0 +1,42 @@
+{
+  "name": "drivemate",
+  "main": "node_modules/expo/AppEntry.js",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "start:clear": "expo start -c",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "lint": "expo lint"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/native-stack": "^7.3.10",
+    "expo": "~58.0.22",
+    "expo-build-properties": "~58.0.12",
+    "expo-font": "~58.0.11",
+    "expo-splash-screen": "~58.0.12",
+    "expo-status-bar": "~58.0.4",
+    "nativewind": "^4.1.23",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-gesture-handler": "~3.3.0",
+    "react-native-reanimated": "4.7.1",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-svg": "15.16.0",
+    "react-native-worklets": "0.13.0",
+    "socket.io-client": "^4.8.4",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@types/react": "~19.3.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
+    "babel-preset-expo": "~58.0.23",
+    "react-native-svg-transformer": "^1.5.3",
+    "typescript": "~6.0.3"
+  },
+  "private": true
+}

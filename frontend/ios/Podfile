@@ -1,0 +1,272 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+require 'json'
+require 'pathname'
+require 'fileutils'
+
+podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+
+module MyTDP
+  module RCTRootViewFactoryHeaderPatch
+    module_function
+
+    TYPO_PATTERN = /\(id<RCTHostDelegate>\)hostdelegate/.freeze
+
+    def apply(installer)
+      roots = [
+        installer.sandbox.root,
+        File.join(Pod::Config.instance.project_root, '..', 'node_modules', 'react-native'),
+        __dir__,
+      ].map { |path| File.expand_path(path) }.uniq
+
+      patched = 0
+      roots.each do |root|
+        Dir.glob(File.join(root, '**/RCTRootViewFactory.h')).each do |header|
+          next unless File.file?(header)
+
+          contents = File.read(header)
+          next unless contents.match?(TYPO_PATTERN)
+
+          File.write(
+            header,
+            contents.gsub('(id<RCTHostDelegate>)hostdelegate', '(id<RCTHostDelegate>)hostDelegate')
+          )
+          patched += 1
+        end
+      end
+
+      Pod::UI.puts "[MyTDP] Patched #{patched} RCTRootViewFactory.h file(s) for prebuilt React module compatibility".green if patched.positive?
+      ensure_mytdp_build_phase(installer)
+    end
+
+    def ensure_mytdp_build_phase(installer)
+      return unless installer.respond_to?(:aggregate_targets)
+
+      script_name = '[MyTDP] Patch RCTRootViewFactory headers'
+      script_body = <<~'SH'
+        set -e
+        find "${PODS_ROOT}" -name RCTRootViewFactory.h 2>/dev/null | while read -r header; do
+          if grep -q '(id<RCTHostDelegate>)hostdelegate' "$header"; then
+            /usr/bin/perl -pi -e 's/\(id<RCTHostDelegate>\)hostdelegate/(id<RCTHostDelegate>)hostDelegate/g' "$header"
+          fi
+        done
+      SH
+
+      installer.aggregate_targets.each do |agg_target|
+        next unless agg_target.name == 'Pods-MyTDP'
+
+        user_project = agg_target.user_project
+        user_project.targets.each do |target|
+          next unless target.name == 'MyTDP'
+
+          existing = target.build_phases.find do |phase|
+            phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) &&
+              phase.name == script_name
+          end
+          next if existing
+
+          phase = user_project.new(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+          phase.name = script_name
+          phase.shell_script = script_body
+          phase.show_env_vars_in_log = '0'
+          target.build_phases.unshift(phase)
+        end
+        user_project.save
+      end
+    end
+  end
+
+end
+
+def ccache_enabled?(podfile_properties)
+  return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
+
+  podfile_properties['apple.ccacheEnabled'] == 'true'
+end
+
+ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
+ENV['RCT_USE_RN_DEP'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ? '0' : '1'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ? '0' : '1'
+ENV['RCT_HERMES_V1_ENABLED'] ||= '0' if podfile_properties['expo.useHermesV1'] == 'false'
+ENV['EXPO_USE_PRECOMPILED_MODULES'] ||= '1' if podfile_properties['EXPO_USE_PRECOMPILED_MODULES'] != 'false'
+
+platform :ios, podfile_properties['ios.deploymentTarget'] || '16.4'
+
+# Keep native Firebase pods on the same SDK as @react-native-firebase/app (22.4 → 11.15.0).
+# Without this, Podfile.lock can leave Crashlytics/CoreExtension on 11.13 while Analytics wants 11.15.
+begin
+  rnfb_app_json = File.join(__dir__, '..', 'node_modules', '@react-native-firebase', 'app', 'package.json')
+  $FirebaseSDKVersion = JSON.parse(File.read(rnfb_app_json)).dig('sdkVersions', 'ios', 'firebase')
+  Pod::UI.puts "[MyTDP] FirebaseSDKVersion=#{$FirebaseSDKVersion}" if $FirebaseSDKVersion
+rescue StandardError => e
+  Pod::UI.warn "[MyTDP] Could not read RN Firebase SDK version: #{e.message}"
+end
+
+prepare_react_native_project!
+
+target 'MyTDP' do
+  use_expo_modules!
+
+  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+  else
+    config_command = [
+      'node',
+      '--no-warnings',
+      '--eval',
+      'require(\'expo/bin/autolinking\')',
+      'expo-modules-autolinking',
+      'react-native-config',
+      '--json',
+      '--platform',
+      'ios'
+    ]
+  end
+
+  config = use_native_modules!(config_command)
+
+  use_frameworks! :linkage => :static
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => ccache_enabled?(podfile_properties),
+    )
+
+    # Resolve from Podfile dir — fastlane/CI cwd may be ios/fastlane, not ios/.
+    react_native_root = File.expand_path(config[:reactNativePath], __dir__)
+    rn_package_json = File.join(react_native_root, 'package.json')
+    unless File.exist?(rn_package_json)
+      Pod::UI.puts "[MyTDP] ERROR: react-native package.json not found at #{rn_package_json}".red
+      Pod::UI.puts "[MyTDP] cwd=#{Dir.pwd}, reactNativePath=#{config[:reactNativePath].inspect}".red
+      raise "react-native package.json not found"
+    end
+    rn_version = JSON.parse(File.read(rn_package_json))['version']
+    prebuilt_target = installer.pod_targets.find { |t| t.name == 'React-Core-prebuilt' }
+    if prebuilt_target && prebuilt_target.root_spec.version.to_s != rn_version
+      Pod::UI.puts "[MyTDP] ERROR: React-Core-prebuilt #{prebuilt_target.root_spec.version} != react-native #{rn_version}".red
+      Pod::UI.puts "[MyTDP] Run: npm run ios:clean  (stale 0.86 prebuilt React causes Hermes dyld crashes)".red
+      raise "React-Core-prebuilt version mismatch"
+    end
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        if target.name.start_with?('RNFB')
+          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        end
+      end
+    end
+
+    installer.target_installation_results.pod_target_installation_results
+      .each do |pod_name, target_installation_result|
+      target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
+        resource_bundle_target.build_configurations.each do |config|
+          config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        end
+      end
+    end
+
+    installer.pods_project.targets.each do |target|
+      if target.name == "hermes-engine"
+        target.project.files.each do |fileref|
+          if fileref.path.end_with? "hermes.xcframework"
+            info_plist = "#{fileref.real_path}/Info.plist"
+            puts "Patching Hermes Info.plist to remove DebugSymbolsPath"
+            system("/usr/libexec/PlistBuddy -c 'Delete :AvailableLibraries:0:DebugSymbolsPath' '#{info_plist}' 2>/dev/null")
+            system("/usr/libexec/PlistBuddy -c 'Delete :AvailableLibraries:1:DebugSymbolsPath' '#{info_plist}' 2>/dev/null")
+            system("/usr/libexec/PlistBuddy -c 'Delete :AvailableLibraries:2:DebugSymbolsPath' '#{info_plist}' 2>/dev/null")
+          end
+        end
+      end
+    end
+
+    # ExpoCamera.xcframework (dynamic) must be embedded alongside ExpoCameraBarcodeScanning.xcframework,
+    # which has a hard @rpath dependency on ExpoCamera.framework at runtime.
+    #
+    # Root cause: the ExpoCamera podspec resolves to source_files (xcframework absent from
+    # node_modules), so CocoaPods never adds ExpoCamera to the embed list. There is also no
+    # [CP] Copy XCFrameworks build phase on ExpoCamera's target in Pods.xcodeproj, so
+    # ${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/ is never populated by the normal build flow.
+    #
+    # Fix: inject an ensure_expo_camera_framework() shell function that uses cp -R to copy the
+    # correct architecture slice directly from the xcframework into the build intermediates dir.
+    # Using cp -R (instead of calling xcframeworks.sh) is intentional: xcframeworks.sh's
+    # select_slice() can silently return without creating the directory when no slice matches,
+    # causing install_framework to fail with set -u on the unset $source variable.
+    frameworks_sh = File.join(installer.sandbox.root,
+      'Target Support Files/Pods-MyTDP/Pods-MyTDP-frameworks.sh')
+    if File.exist?(frameworks_sh)
+      content = File.read(frameworks_sh)
+      unless content.include?('ensure_expo_camera_framework')
+        ensure_fn = <<~'SH'
+
+          # ExpoCamera.xcframework has no [CP] Copy XCFrameworks build phase; ensure the right
+          # architecture slice exists before install_framework runs (set -u would fail otherwise).
+          ensure_expo_camera_framework() {
+            local dst="${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/ExpoCamera.framework"
+            if [ ! -d "${dst}" ]; then
+              mkdir -p "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera"
+              if [[ "${PLATFORM_NAME}" == *"simulator"* ]]; then
+                cp -R "${PODS_ROOT}/ExpoCamera/ExpoCamera.xcframework/ios-arm64_x86_64-simulator/ExpoCamera.framework" \
+                      "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/"
+              else
+                cp -R "${PODS_ROOT}/ExpoCamera/ExpoCamera.xcframework/ios-arm64/ExpoCamera.framework" \
+                      "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/"
+              fi
+            fi
+          }
+
+        SH
+
+        content.sub!(
+          "\nif [[ \"$CONFIGURATION\" == \"Debug\" ]]; then",
+          "#{ensure_fn}if [[ \"$CONFIGURATION\" == \"Debug\" ]]; then"
+        )
+
+        content.gsub!(
+          '  install_framework "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCameraBarcodeScanning/ExpoCameraBarcodeScanning.framework"',
+          "  ensure_expo_camera_framework\n  install_framework \"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/ExpoCamera.framework\"\n  install_framework \"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCameraBarcodeScanning/ExpoCameraBarcodeScanning.framework\""
+        )
+
+        File.write(frameworks_sh, content)
+        Pod::UI.puts '[MyTDP] Patched Pods-MyTDP-frameworks.sh: added ExpoCamera xcframework ensure + embed'.green
+      end
+    end
+
+    # Update MyTDP.xcodeproj [CP] Embed Pods Frameworks phase to include ExpoCamera in
+    # inputPaths/outputPaths so Xcode tracks it for incremental builds.
+    installer.aggregate_targets.each do |agg_target|
+      next unless agg_target.name == 'Pods-MyTDP'
+      user_project = agg_target.user_project
+      user_project.targets.each do |target|
+        next unless target.name == 'MyTDP'
+        target.build_phases.each do |phase|
+          next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+          next unless phase.shell_script.to_s.include?('Pods-MyTDP-frameworks.sh')
+          expo_input = '${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoCamera/ExpoCamera.framework/ExpoCamera'
+          expo_output = '${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoCamera.framework'
+          unless phase.input_paths.include?(expo_input)
+            phase.input_paths << expo_input
+          end
+          unless phase.output_paths.include?(expo_output)
+            phase.output_paths << expo_output
+          end
+        end
+      end
+      user_project.save
+    end
+
+    # After all pod/expo mutations — fix React-Core-prebuilt header typo (hostdelegate vs hostDelegate).
+    MyTDP::RCTRootViewFactoryHeaderPatch.apply(installer)
+  end
+end

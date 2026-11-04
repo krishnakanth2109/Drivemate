@@ -1,0 +1,19 @@
+import mongoose from 'mongoose';
+
+const messageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  senderId: { type: String, required: true, index: true },
+  senderName: { type: String, required: true },
+  senderTag: { type: String, default: '@driver' },
+  recipientId: { type: String, default: 'community' },
+  roomId: { type: String, default: 'drivemate-hq', index: true },
+  text: { type: String, required: true },
+  time: { type: String, default: 'Just now' },
+  status: { type: String, default: 'sent' }, // sent, delivered, read
+}, {
+  timestamps: true,
+});
+
+export const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
+export default Message;
+

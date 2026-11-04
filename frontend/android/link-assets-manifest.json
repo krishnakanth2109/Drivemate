@@ -1,0 +1,53 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "assets/fonts/poppins/OFL.txt",
+      "sha1": "06578f59377f801890d1a1eeb1279e3e51e0803d"
+    },
+    {
+      "path": "assets/fonts/poppins/Poppins-Bold.ttf",
+      "sha1": "cbe48c785f1af6bcd7320609094055e299481da9"
+    },
+    {
+      "path": "assets/fonts/poppins/Poppins-Light.ttf",
+      "sha1": "ecceeecdfea053e23ee31bf56806fc39f9d32e7d"
+    },
+    {
+      "path": "assets/fonts/poppins/Poppins-Medium.ttf",
+      "sha1": "5c96d1545a51c39e05ee0fcc0c3c9021f14d9c31"
+    },
+    {
+      "path": "assets/fonts/poppins/Poppins-Regular.ttf",
+      "sha1": "440dc8992517a306d66e55cb0afed0cfe9b971b5"
+    },
+    {
+      "path": "assets/fonts/poppins/Poppins-SemiBold.ttf",
+      "sha1": "0dbbb6d5a8fa0f9ece415dda4a69c8aa6595fba5"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/COPYRIGHT.txt",
+      "sha1": "85603d816dd3e2935426f01dbaff05f48fd166fb"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/SFPro_Font_License.rtf",
+      "sha1": "7f9c153ebc877e40dc896d5e2001f9a3dae33751"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/SFProText-Bold.ttf",
+      "sha1": "632e6cea171b276e5dd1f13b152c702fbf562cee"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/SFProText-Medium.ttf",
+      "sha1": "3b8df618cd23e83843b16a8a32de1ddc9de44df4"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/SFProText-Regular.ttf",
+      "sha1": "b4893462f2289df6978f9462a63db9e64bcc9342"
+    },
+    {
+      "path": "assets/fonts/SanFranciscoProText/SFProText-Semibold.ttf",
+      "sha1": "9560ae412d73c7c9af72333db50464b4e597b0f9"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const STORAGE_KEYS = {
+  AUTH_TOKEN: "@drivemate_auth_token",
+  USER_PROFILE: "@drivemate_user_profile",
+  POST_QUOTA: "@drivemate_post_quota",
+};
+
+export interface StoredUserProfile {
+  uid: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  username?: string;
+  bio?: string;
+  location?: string;
+  drivingStyle?: string;
+  isProUser: boolean;
+  freePostsUsed: number;
+  maxFreePosts: number;
+  singlePasses: number;
+  vehicles?: any[];
+}
+
+/**
+ * Persist authentication token to AsyncStorage
+ */
+export async function saveAuthToken(token: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+  } catch (error) {
+    console.error("[Storage] Failed to save auth token:", error);
+  }
+}
+
+/**
+ * Retrieve authentication token from AsyncStorage
+ */
+export async function getAuthToken(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  } catch (error) {
+    console.error("[Storage] Failed to get auth token:", error);
+    return null;
+  }
+}
+
+/**
+ * Remove authentication token from AsyncStorage
+ */
+export async function removeAuthToken(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+  } catch (error) {
+    console.error("[Storage] Failed to remove auth token:", error);
+  }
+}
+
+/**
+ * Persist user profile to AsyncStorage
+ */
+export async function saveUserProfile(profile: StoredUserProfile): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+  } catch (error) {
+    console.error("[Storage] Failed to save user profile:", error);
+  }
+}
+
+/**
+ * Retrieve user profile from AsyncStorage
+ */
+export async function getUserProfile(): Promise<StoredUserProfile | null> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.error("[Storage] Failed to get user profile:", error);
+    return null;
+  }
+}
+
+/**
+ * Clear all authentication data from AsyncStorage (for logout)
+ */
+export async function clearAuthSession(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.USER_PROFILE,
+      STORAGE_KEYS.POST_QUOTA,
+    ]);
+  } catch (error) {
+    console.error("[Storage] Failed to clear auth session:", error);
+  }
+}
+
+export default {
+  saveAuthToken,
+  getAuthToken,
+  removeAuthToken,
+  saveUserProfile,
+  getUserProfile,
+  clearAuthSession,
+};
+
