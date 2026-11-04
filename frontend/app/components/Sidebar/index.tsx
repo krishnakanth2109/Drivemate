@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
   Animated,
@@ -60,108 +59,97 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail = "alex@drivemate.com",
 }) => {
   const insets = useSafeAreaInsets();
-  const [modalVisible, setModalVisible] = useState(isOpen);
+  const [shouldRender, setShouldRender] = useState(isOpen);
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const isTransitioning = useRef(false);
 
   // Sync open state with smooth slide & fade in
   useEffect(() => {
     if (isOpen) {
-      setModalVisible(true);
-      isTransitioning.current = true;
+      setShouldRender(true);
       slideAnim.setValue(-SIDEBAR_WIDTH);
       opacityAnim.setValue(0);
 
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 240,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
-          duration: 250,
+          duration: 240,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
+      ]).start();
+    } else if (shouldRender) {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: -SIDEBAR_WIDTH,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]).start(() => {
-        isTransitioning.current = false;
+        setShouldRender(false);
       });
-    } else if (modalVisible && !isTransitioning.current) {
-      // Triggered if parent resets isOpen externally
-      handleClose();
     }
   }, [isOpen]);
 
   // Smooth slide out and collapse handler
-  const handleClose = useCallback((callback?: () => void) => {
-    if (isTransitioning.current) return;
-    isTransitioning.current = true;
-
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: -SIDEBAR_WIDTH,
-        duration: 200,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      isTransitioning.current = false;
-      setModalVisible(false);
+  const handleClose = useCallback(
+    (callback?: () => void) => {
       onClose();
       if (callback) {
-        callback();
+        setTimeout(callback, 210);
       }
-    });
-  }, [slideAnim, opacityAnim, onClose]);
+    },
+    [onClose]
+  );
 
-  if (!isOpen && !modalVisible) {
+  if (!isOpen && !shouldRender) {
     return null;
   }
 
   const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
 
   return (
-    <Modal
-      visible={modalVisible}
-      transparent
-      animationType="none"
-      onRequestClose={() => handleClose()}
-      statusBarTranslucent
+    <View
+      style={styles.overlay}
+      pointerEvents={isOpen ? "auto" : "none"}
     >
-      <View style={styles.modalRoot}>
-        {/* Backdrop: tapping outside the drawer smoothly collapses it */}
-        <TouchableWithoutFeedback onPress={() => handleClose()}>
-          <Animated.View
-            style={[
-              styles.backdrop,
-              {
-                opacity: opacityAnim,
-              },
-            ]}
-          />
-        </TouchableWithoutFeedback>
-
-        {/* Drawer Panel */}
+      {/* Backdrop: tapping outside the drawer smoothly collapses it */}
+      <TouchableWithoutFeedback onPress={() => handleClose()}>
         <Animated.View
           style={[
-            styles.drawer,
+            styles.backdrop,
             {
-              width: SIDEBAR_WIDTH,
-              paddingTop: insets.top + (Platform.OS === "ios" ? 12 : 20),
-              paddingBottom: Math.max(insets.bottom, 20),
-              transform: [{ translateX: slideAnim }],
+              opacity: opacityAnim,
             },
           ]}
-        >
+        />
+      </TouchableWithoutFeedback>
+
+      {/* Drawer Panel */}
+      <Animated.View
+        style={[
+          styles.drawer,
+          {
+            width: SIDEBAR_WIDTH,
+            paddingTop: insets.top + (Platform.OS === "ios" ? 12 : 20),
+            paddingBottom: Math.max(insets.bottom, 20),
+            transform: [{ translateX: slideAnim }],
+          },
+        ]}
+      >
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.drawerScroll}
@@ -338,15 +326,20 @@ const Sidebar: React.FC<SidebarProps> = ({
           </ScrollView>
         </Animated.View>
       </View>
-    </Modal>
-  );
+    );
 };
 
 export default Sidebar;
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
+  overlay: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 99999,
+    elevation: 99999,
   },
   backdrop: {
     position: "absolute",
@@ -370,6 +363,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 20,
     elevation: 28,
+    zIndex: 100000,
   },
   drawerScroll: {
     flexGrow: 1,
