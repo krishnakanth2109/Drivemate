@@ -1,18 +1,11 @@
 import { io, Socket } from "socket.io-client";
-import { Platform } from "react-native";
+import { getActiveBaseUrl } from "./api";
 
 let socket: Socket | null = null;
 
 export const getSocketUrl = (): string => {
-  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    let clean = envUrl.trim().replace(/\/api\/?$/, "").replace(/\/+$/, "");
-    if (Platform.OS === "android" && clean.includes("localhost")) {
-      clean = clean.replace("localhost", "10.0.2.2");
-    }
-    return clean;
-  }
-  return Platform.OS === "android" ? "http://10.0.2.2:5000" : "http://localhost:5000";
+  const apiBase = getActiveBaseUrl();
+  return apiBase.replace(/\/api\/?$/, "");
 };
 
 export function getSocket(): Socket {

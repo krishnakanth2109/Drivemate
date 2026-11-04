@@ -1,26 +1,70 @@
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { getAuthToken, saveAuthToken, saveUserProfile, clearAuthSession, StoredUserProfile } from "./storage";
 
-// Determine API base URL from frontend .env with platform fallbacks
-const getApiBaseUrl = (): string => {
+// Helper to auto-detect dev server host IP (e.g. 192.168.0.123 or localhost)
+const getDevHost = (): string | null => {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
+      return window.location.hostname;
+    }
+    const hostUri =
+      Constants.expoConfig?.hostUri ||
+      (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+      (Constants as any).manifest?.debuggerHost;
+    if (hostUri) {
+      return hostUri.split(":")[0];
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+};
+
+// Build candidate base URLs in priority order for robust multi-device reachability
+const getCandidateBaseUrls = (): string[] => {
+  const list: string[] = [];
+  const devHost = getDevHost();
+
+  // 1. Dev Host IP from Expo / Browser if available
+  if (devHost) {
+    list.push(`http://${devHost}:5000/api`);
+  }
+
+  // 2. Explicit .env variable if provided
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_SERVER_URL;
   if (envUrl && envUrl.trim().length > 0) {
     const trimmed = envUrl.trim().replace(/\/+$/, "");
     const formatted = trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
-    // If running on Android emulator with localhost, translate to 10.0.2.2 loopback alias
-    if (Platform.OS === "android" && formatted.includes("localhost")) {
-      return formatted.replace("localhost", "10.0.2.2");
+    if (!list.includes(formatted)) {
+      list.push(formatted);
     }
-    return formatted;
   }
 
-  if (Platform.OS === "android") {
-    return "http://10.0.2.2:5000/api";
+  // 3. Known LAN IP fallback
+  const lanUrl = "http://192.168.0.123:5000/api";
+  if (!list.includes(lanUrl)) {
+    list.push(lanUrl);
   }
-  return "http://localhost:5000/api";
+
+  // 4. Android emulator special alias
+  if (Platform.OS === "android" && !list.includes("http://10.0.2.2:5000/api")) {
+    list.push("http://10.0.2.2:5000/api");
+  }
+
+  // 5. Standard localhost
+  if (!list.includes("http://localhost:5000/api")) {
+    list.push("http://localhost:5000/api");
+  }
+
+  return list;
 };
 
-export const API_BASE_URL = getApiBaseUrl();
+// Active working base URL (cached once confirmed)
+let activeBaseUrl = getCandidateBaseUrls()[0];
+
+export const getActiveBaseUrl = () => activeBaseUrl;
+export const API_BASE_URL = activeBaseUrl;
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
@@ -35,11 +79,11 @@ export interface ApiResponse<T = any> {
 }
 
 /**
- * Centralized fetch helper with automatic Bearer token injection
+ * Centralized fetch helper with automatic multi-host candidate fallback & Bearer token injection
  */
 async function request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
   const { requiresAuth = true, headers = {}, ...rest } = options;
-  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
   const requestHeaders: Record<string, string> = {
     "Content-Type": "application/json",
@@ -53,44 +97,58 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     }
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+  const candidates = [activeBaseUrl, ...getCandidateBaseUrls().filter((u) => u !== activeBaseUrl)];
+  let lastError: any = null;
 
-    const response = await fetch(url, {
-      ...rest,
-      headers: requestHeaders,
-      signal: controller.signal,
-    });
+  for (const candidateBase of candidates) {
+    const targetUrl = `${candidateBase}${cleanEndpoint}`;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    clearTimeout(timeoutId);
+      const response = await fetch(targetUrl, {
+        ...rest,
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
 
-    const data = await response.json().catch(() => ({}));
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
+      // Successfully contacted server! Remember working base URL for subsequent calls
+      activeBaseUrl = candidateBase;
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || `Server responded with status ${response.status}`,
+          ...data,
+        };
+      }
+
       return {
-        success: false,
-        error: data.error || `Server responded with status ${response.status}`,
+        success: true,
         ...data,
       };
+    } catch (err: any) {
+      lastError = err;
+      // Network failure on this candidate; loop to try next candidate IP
+      continue;
     }
+  }
 
-    return {
-      success: true,
-      ...data,
-    };
-  } catch (error: any) {
-    if (error.name === "AbortError") {
-      return {
-        success: false,
-        error: "Network request timed out. Please check your backend connection.",
-      };
-    }
+  if (lastError?.name === "AbortError") {
     return {
       success: false,
-      error: error.message || "Failed to communicate with server.",
+      error: "Network request timed out. Please verify backend server is running on port 5000.",
     };
   }
+
+  return {
+    success: false,
+    error: `Could not reach backend server on port 5000 (${candidates.join(", ")}). Please ensure backend is running with 'npm start'.`,
+  };
 }
 
 // ================= AUTH API =================
