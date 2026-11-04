@@ -21,44 +21,18 @@ import {
   MailIcon,
   PhoneIcon,
   LockIcon,
-  SparklesIcon,
   ArrowLeftIcon,
   CarIcon,
   MotorcycleIcon,
   CheckCircleIcon,
+  ShieldIcon,
+  SparklesIcon,
 } from "../../components/Icons";
 import { authAPI } from "../../services/api";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Register">;
 
 const TOTAL_STEPS = 7;
-
-const DRIVING_STYLES = [
-  {
-    id: "ev",
-    title: "EV Long-Haul & Charging",
-    desc: "Supercharger networks, live stalls, and battery thermal tips",
-    icon: "⚡",
-  },
-  {
-    id: "commute",
-    title: "Daily Commute & Traffic",
-    desc: "Real-time road hazard alerts, speed traps, and traffic bypasses",
-    icon: "🚗",
-  },
-  {
-    id: "performance",
-    title: "Performance & Track-Day",
-    desc: "Tire pressure telemetry, brake wear, and spirited mountain runs",
-    icon: "🏎️",
-  },
-  {
-    id: "roadtrip",
-    title: "Scenic Highway Road-Trips",
-    desc: "Coastal corridors, national park routes, and scenic vistas",
-    icon: "🌄",
-  },
-];
 
 const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -70,49 +44,99 @@ const RegisterScreen: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [username, setUsername] = useState("");
   const [vehicleType, setVehicleType] = useState<"4 Wheeler" | "2 Wheeler">("4 Wheeler");
-  const [drivingStyle, setDrivingStyle] = useState("commute");
+  const [drivingStyle] = useState("commute");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [devOtpCode, setDevOtpCode] = useState("123456");
+  const [resendTimer, setResendTimer] = useState(60);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // ScrollView Ref
+  const scrollViewRef = useRef<any>(null);
 
   // Animations
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const cardScale4W = useRef(new Animated.Value(1)).current;
-  const cardScale2W = useRef(new Animated.Value(1)).current;
+  const isTransitioning = useRef(false);
 
-  // Animate progress bar on step change
+  // Animate progress bar smoothly on step change
   useEffect(() => {
     Animated.timing(progressAnim, {
       toValue: currentStep / TOTAL_STEPS,
-      duration: 320,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [currentStep]);
 
-  const triggerStepTransition = (nextStep: number, direction: "forward" | "back") => {
-    fadeAnim.setValue(0);
-    slideAnim.setValue(direction === "forward" ? 24 : -24);
-    setCurrentStep(nextStep);
+  // Resend OTP countdown timer
+  useEffect(() => {
+    let interval: any = null;
+    if (currentStep === 7 && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentStep, resendTimer]);
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 260,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 80,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  // Silky smooth step transition: quick fade-out -> state update -> slide & fade in
+  const triggerStepTransition = (nextStep: number, direction: "forward" | "back") => {
+    if (isTransitioning.current) return;
+    isTransitioning.current = true;
+
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 80,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentStep(nextStep);
+      slideAnim.setValue(direction === "forward" ? 18 : -18);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        isTransitioning.current = false;
+      });
+    });
+  };
+
+  const dispatchOtp = async () => {
+    setIsSendingOtp(true);
+    try {
+      const res = await authAPI.sendOtp({
+        email: email.trim(),
+        phoneNumber: phoneNumber.trim(),
+      });
+      setIsSendingOtp(false);
+      if (res.success) {
+        if (res.devOtp) {
+          setDevOtpCode(res.devOtp);
+        }
+        setResendTimer(60);
+      }
+    } catch {
+      setIsSendingOtp(false);
+    }
   };
 
   const handleNextStep = () => {
@@ -148,10 +172,20 @@ const RegisterScreen: React.FC = () => {
         }
         break;
       case 6:
-        if (!drivingStyle) {
-          Alert.alert("Focus Required", "Please select your primary driving focus.");
+        if (!password.trim() || !confirmPassword.trim()) {
+          Alert.alert("Password Required", "Please enter and confirm your password.");
           return;
         }
+        if (password !== confirmPassword) {
+          Alert.alert("Password Mismatch", "Passwords do not match. Please verify.");
+          return;
+        }
+        if (password.length < 6) {
+          Alert.alert("Weak Password", "Password must be at least 6 characters.");
+          return;
+        }
+        // Send OTP when progressing to final Step 7
+        dispatchOtp();
         break;
       default:
         break;
@@ -170,36 +204,16 @@ const RegisterScreen: React.FC = () => {
     }
   };
 
-  const selectVehicleTypeWithAnimation = (type: "4 Wheeler" | "2 Wheeler") => {
-    setVehicleType(type);
-    const targetAnim = type === "4 Wheeler" ? cardScale4W : cardScale2W;
-
-    Animated.sequence([
-      Animated.timing(targetAnim, {
-        toValue: 0.96,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.spring(targetAnim, {
-        toValue: 1,
-        friction: 5,
-        tension: 90,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const handleResendOtp = async () => {
+    if (resendTimer > 0) return;
+    await dispatchOtp();
+    Alert.alert("Code Sent", `A fresh 6-digit OTP code has been dispatched to ${email || phoneNumber}.`);
   };
 
-  const handleCompleteRegistration = async () => {
-    if (!password.trim() || !confirmPassword.trim()) {
-      Alert.alert("Password Required", "Please create and confirm your password.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert("Password Mismatch", "Passwords do not match. Please verify.");
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert("Weak Password", "Password must be at least 6 characters.");
+  const handleCompleteRegistrationWithOtp = async () => {
+    const cleanOtp = otp.trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      Alert.alert("OTP Required", "Please enter the complete 6-digit verification code.");
       return;
     }
 
@@ -213,6 +227,7 @@ const RegisterScreen: React.FC = () => {
         vehicleType: vehicleType,
         drivingStyle: drivingStyle,
         password: password.trim(),
+        otp: cleanOtp,
       });
 
       setIsLoading(false);
@@ -224,11 +239,11 @@ const RegisterScreen: React.FC = () => {
           [{ text: "Start Driving", onPress: () => navigation.replace("Dashboard") }]
         );
       } else {
-        Alert.alert("Registration Failed", response.error || "Unable to create account.");
+        Alert.alert("Verification Failed", response.error || "Unable to verify registration code.");
       }
     } catch (err: any) {
       setIsLoading(false);
-      Alert.alert("Error", err.message || "Failed to connect to registration server.");
+      Alert.alert("Error", err.message || "Failed to connect to verification server.");
     }
   };
 
@@ -239,7 +254,7 @@ const RegisterScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* Top Header & Navigation */}
+      {/* Top Header & Step Progress */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -276,7 +291,7 @@ const RegisterScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Smooth Animated Progress Bar */}
+      {/* Smooth Progress Indicator Bar */}
       <View style={styles.progressBarTrack}>
         <Animated.View
           style={[styles.progressBarFill, { width: progressInterpolate }]}
@@ -288,9 +303,11 @@ const RegisterScreen: React.FC = () => {
         style={styles.keyboardView}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
           <Animated.View
             style={{
@@ -322,7 +339,6 @@ const RegisterScreen: React.FC = () => {
                     onChangeText={setFullName}
                     onFocus={() => setFocusedField("name")}
                     onBlur={() => setFocusedField(null)}
-                    autoFocus
                   />
                 </View>
               </View>
@@ -355,13 +371,12 @@ const RegisterScreen: React.FC = () => {
                     autoCorrect={false}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
-                    autoFocus
                   />
                 </View>
               </View>
             )}
 
-            {/* STEP 3: MOBILE NUMBER */}
+            {/* STEP 3: MOBILE PHONE NUMBER */}
             {currentStep === 3 && (
               <View style={styles.stepCard}>
                 <View style={styles.stepIconSquircle}>
@@ -369,7 +384,7 @@ const RegisterScreen: React.FC = () => {
                 </View>
                 <Text style={styles.stepTitle}>Your mobile number</Text>
                 <Text style={styles.stepSubtitle}>
-                  Critical for 2-factor security and instant 24/7 emergency roadside dispatch.
+                  Critical for 2-factor security and instant 24/7 roadside assistance dispatch.
                 </Text>
 
                 <View style={styles.inputGroup}>
@@ -386,7 +401,6 @@ const RegisterScreen: React.FC = () => {
                     keyboardType="phone-pad"
                     onFocus={() => setFocusedField("phone")}
                     onBlur={() => setFocusedField(null)}
-                    autoFocus
                   />
                 </View>
               </View>
@@ -422,7 +436,6 @@ const RegisterScreen: React.FC = () => {
                       autoCorrect={false}
                       onFocus={() => setFocusedField("handle")}
                       onBlur={() => setFocusedField(null)}
-                      autoFocus
                     />
                   </View>
                 </View>
@@ -437,137 +450,87 @@ const RegisterScreen: React.FC = () => {
                 </View>
                 <Text style={styles.stepTitle}>Select your vehicle</Text>
                 <Text style={styles.stepSubtitle}>
-                  Choose your primary vehicle type. You can switch or add more rides anytime.
+                  Choose your primary ride type. You can switch or add more rides anytime.
                 </Text>
 
                 <View style={styles.vehicleCardsContainer}>
                   {/* 4 Wheeler Option */}
-                  <Animated.View style={{ transform: [{ scale: cardScale4W }] }}>
-                    <TouchableOpacity
+                  <TouchableOpacity
+                    style={[
+                      styles.vehicleOptionCard,
+                      vehicleType === "4 Wheeler" && styles.vehicleOptionCardActive,
+                    ]}
+                    onPress={() => setVehicleType("4 Wheeler")}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.vehicleOptionIconWrapper}>
+                      <CarIcon
+                        size={28}
+                        color={vehicleType === "4 Wheeler" ? "#09090b" : "#71717a"}
+                      />
+                    </View>
+                    <View style={styles.vehicleOptionInfo}>
+                      <View style={styles.vehicleHeaderRow}>
+                        <Text style={styles.vehicleOptionTitle}>4 Wheeler</Text>
+                        <Text style={styles.vehicleBadgePill}>Cars • SUVs • EVs</Text>
+                      </View>
+                      <Text style={styles.vehicleOptionSubtitle}>
+                        Ideal for daily commute, long highway road trips, and charging network alerts.
+                      </Text>
+                    </View>
+                    <View
                       style={[
-                        styles.vehicleOptionCard,
-                        vehicleType === "4 Wheeler" && styles.vehicleOptionCardActive,
+                        styles.selectionIndicatorCircle,
+                        vehicleType === "4 Wheeler" && styles.selectionIndicatorActive,
                       ]}
-                      onPress={() => selectVehicleTypeWithAnimation("4 Wheeler")}
-                      activeOpacity={0.85}
                     >
-                      <View style={styles.vehicleOptionIconWrapper}>
-                        <CarIcon
-                          size={28}
-                          color={vehicleType === "4 Wheeler" ? "#09090b" : "#71717a"}
-                        />
-                      </View>
-                      <View style={styles.vehicleOptionInfo}>
-                        <View style={styles.vehicleHeaderRow}>
-                          <Text style={styles.vehicleOptionTitle}>4 Wheeler</Text>
-                          <Text style={styles.vehicleBadgePill}>Cars • SUVs • EVs</Text>
-                        </View>
-                        <Text style={styles.vehicleOptionSubtitle}>
-                          Ideal for daily commute, long highway road trips, family touring, and charging network alerts.
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.selectionIndicatorCircle,
-                          vehicleType === "4 Wheeler" && styles.selectionIndicatorActive,
-                        ]}
-                      >
-                        {vehicleType === "4 Wheeler" && (
-                          <View style={styles.selectionIndicatorDot} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
+                      {vehicleType === "4 Wheeler" && (
+                        <View style={styles.selectionIndicatorDot} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
 
                   {/* 2 Wheeler Option */}
-                  <Animated.View style={{ transform: [{ scale: cardScale2W }] }}>
-                    <TouchableOpacity
+                  <TouchableOpacity
+                    style={[
+                      styles.vehicleOptionCard,
+                      vehicleType === "2 Wheeler" && styles.vehicleOptionCardActive,
+                    ]}
+                    onPress={() => setVehicleType("2 Wheeler")}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.vehicleOptionIconWrapper}>
+                      <MotorcycleIcon
+                        size={28}
+                        color={vehicleType === "2 Wheeler" ? "#09090b" : "#71717a"}
+                      />
+                    </View>
+                    <View style={styles.vehicleOptionInfo}>
+                      <View style={styles.vehicleHeaderRow}>
+                        <Text style={styles.vehicleOptionTitle}>2 Wheeler</Text>
+                        <Text style={styles.vehicleBadgePill}>Motorcycles • Scooters</Text>
+                      </View>
+                      <Text style={styles.vehicleOptionSubtitle}>
+                        Perfect for urban lane filtering, scenic mountain passes, and agile stops.
+                      </Text>
+                    </View>
+                    <View
                       style={[
-                        styles.vehicleOptionCard,
-                        vehicleType === "2 Wheeler" && styles.vehicleOptionCardActive,
+                        styles.selectionIndicatorCircle,
+                        vehicleType === "2 Wheeler" && styles.selectionIndicatorActive,
                       ]}
-                      onPress={() => selectVehicleTypeWithAnimation("2 Wheeler")}
-                      activeOpacity={0.85}
                     >
-                      <View style={styles.vehicleOptionIconWrapper}>
-                        <MotorcycleIcon
-                          size={28}
-                          color={vehicleType === "2 Wheeler" ? "#09090b" : "#71717a"}
-                        />
-                      </View>
-                      <View style={styles.vehicleOptionInfo}>
-                        <View style={styles.vehicleHeaderRow}>
-                          <Text style={styles.vehicleOptionTitle}>2 Wheeler</Text>
-                          <Text style={styles.vehicleBadgePill}>Motorcycles • Scooters</Text>
-                        </View>
-                        <Text style={styles.vehicleOptionSubtitle}>
-                          Perfect for urban lane filtering, scenic mountain passes, agile parking, and quick fuel stops.
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.selectionIndicatorCircle,
-                          vehicleType === "2 Wheeler" && styles.selectionIndicatorActive,
-                        ]}
-                      >
-                        {vehicleType === "2 Wheeler" && (
-                          <View style={styles.selectionIndicatorDot} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
+                      {vehicleType === "2 Wheeler" && (
+                        <View style={styles.selectionIndicatorDot} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
 
-            {/* STEP 6: DRIVING STYLE / COMMUNITY FOCUS */}
+            {/* STEP 6: SECURE PASSWORD & CONFIRM */}
             {currentStep === 6 && (
-              <View style={styles.stepCard}>
-                <View style={styles.stepIconSquircle}>
-                  <SparklesIcon size={24} color="#09090b" />
-                </View>
-                <Text style={styles.stepTitle}>Your driving focus</Text>
-                <Text style={styles.stepSubtitle}>
-                  We personalize your community discussions and route alerts based on this.
-                </Text>
-
-                <View style={styles.stylesList}>
-                  {DRIVING_STYLES.map((style) => {
-                    const isSelected = drivingStyle === style.id;
-                    return (
-                      <TouchableOpacity
-                        key={style.id}
-                        style={[
-                          styles.styleCard,
-                          isSelected && styles.styleCardSelected,
-                        ]}
-                        onPress={() => setDrivingStyle(style.id)}
-                        activeOpacity={0.75}
-                      >
-                        <View style={styles.styleIconWrapper}>
-                          <Text style={styles.styleIconEmoji}>{style.icon}</Text>
-                        </View>
-                        <View style={styles.styleInfo}>
-                          <Text style={styles.styleTitle}>{style.title}</Text>
-                          <Text style={styles.styleDesc}>{style.desc}</Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.radioCircle,
-                            isSelected && styles.radioCircleSelected,
-                          ]}
-                        >
-                          {isSelected && <View style={styles.radioDot} />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* STEP 7: SECURE PASSWORD & CONFIRM */}
-            {currentStep === 7 && (
               <View style={styles.stepCard}>
                 <View style={styles.stepIconSquircle}>
                   <LockIcon size={24} color="#09090b" />
@@ -625,6 +588,97 @@ const RegisterScreen: React.FC = () => {
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
+              </View>
+            )}
+
+            {/* STEP 7: OTP VERIFICATION (FINAL STEP) */}
+            {currentStep === 7 && (
+              <View style={styles.stepCard}>
+                <View style={styles.stepIconSquircle}>
+                  <ShieldIcon size={24} color="#09090b" />
+                </View>
+                <Text style={styles.stepTitle}>Verify Registration</Text>
+                <Text style={styles.stepSubtitle}>
+                  Enter the 6-digit one-time code dispatched to{" "}
+                  <Text style={{ fontWeight: "700", color: "#09090b" }}>
+                    {email || phoneNumber}
+                  </Text>.
+                </Text>
+
+                {/* 1-Tap Dev Quick-Fill Pill */}
+                <TouchableOpacity
+                  style={styles.devOtpPill}
+                  onPress={() => setOtp(devOtpCode || "123456")}
+                  activeOpacity={0.75}
+                >
+                  <SparklesIcon size={12} color="#09090b" />
+                  <Text style={styles.devOtpText}>
+                    Quick-Fill Test Code:{" "}
+                    <Text style={{ fontWeight: "800", color: "#09090b" }}>
+                      {devOtpCode || "123456"}
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Reliable Native OTP Input with Visual 6-Cell Overlay */}
+                <View style={styles.otpInputContainer}>
+                  {/* Visual Cells (Non-interactive display underneath) */}
+                  <View style={styles.otpBoxesRow} pointerEvents="none">
+                    {Array.from({ length: 6 }).map((_, idx) => {
+                      const digit = otp[idx] || "";
+                      const isCellFocused = otp.length === idx;
+                      return (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.otpBox,
+                            digit.length > 0 && styles.otpBoxFilled,
+                            isCellFocused && styles.otpBoxActive,
+                          ]}
+                        >
+                          <Text style={styles.otpDigitText}>{digit}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Real Transparent TextInput positioned exactly on top */}
+                  <TextInput
+                    style={styles.realOtpInput}
+                    value={otp}
+                    onChangeText={(val) => {
+                      const clean = val.replace(/[^0-9]/g, "").slice(0, 6);
+                      setOtp(clean);
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    textContentType="oneTimeCode"
+                    autoComplete="sms-otp"
+                    selectionColor="transparent"
+                  />
+                </View>
+
+                {/* Resend Action */}
+                <View style={styles.resendContainer}>
+                  {resendTimer > 0 ? (
+                    <Text style={styles.resendTimerText}>
+                      Resend code in{" "}
+                      <Text style={{ fontWeight: "700", color: "#09090b" }}>
+                        {resendTimer}s
+                      </Text>
+                    </Text>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleResendOtp}
+                      disabled={isSendingOtp}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.resendActionLink}>
+                        {isSendingOtp ? "Dispatching..." : "Didn't receive code? Resend Code"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
 
                 {/* Free Tier Perk Box */}
                 <View style={styles.perkNoticeBox}>
@@ -635,43 +689,58 @@ const RegisterScreen: React.FC = () => {
                     </Text>
                   </View>
                   <Text style={styles.perkNoticeSub}>
-                    Publish tips, traffic updates, or road trip routes immediately after signup. Concurrency quota locked via Redis.
+                    Account activation unlocks 2 free community journey posts & real-time messaging.
                   </Text>
                 </View>
               </View>
             )}
+
+            {/* Action Buttons inside the unified animated container */}
+            <View style={styles.actionSection}>
+              {currentStep < TOTAL_STEPS ? (
+                <TouchableOpacity
+                  style={styles.continueBtn}
+                  onPress={handleNextStep}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.continueBtnText}>Continue →</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.continueBtn,
+                    (isLoading || otp.length < 6) && styles.continueBtnDisabled,
+                  ]}
+                  onPress={handleCompleteRegistrationWithOtp}
+                  disabled={isLoading || otp.length < 6}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.continueBtnText}>
+                    {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <Text style={styles.termsNotice}>
+                By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
+              </Text>
+
+              {currentStep === 1 && (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("Login")}
+                  style={{ marginTop: 14, alignItems: "center", paddingVertical: 4 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 13, color: "#71717a", fontWeight: "500" }}>
+                    Already have an account?{" "}
+                    <Text style={{ color: "#09090b", fontWeight: "700" }}>
+                      Sign In
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </Animated.View>
-
-          {/* Action Button */}
-          <View style={styles.actionSection}>
-            {currentStep < TOTAL_STEPS ? (
-              <TouchableOpacity
-                style={styles.continueBtn}
-                onPress={handleNextStep}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.continueBtnText}>Continue →</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.continueBtn,
-                  isLoading && styles.continueBtnDisabled,
-                ]}
-                onPress={handleCompleteRegistration}
-                disabled={isLoading}
-                activeOpacity={0.88}
-              >
-                <Text style={styles.continueBtnText}>
-                  {isLoading ? "Creating Account..." : "Complete & Launch Drivemate"}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <Text style={styles.termsNotice}>
-              By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
-            </Text>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -759,7 +828,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   stepCard: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   stepIconSquircle: {
     width: 52,
@@ -788,7 +857,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#71717a",
     lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: 22,
   },
   inputGroup: {
     marginBottom: 16,
@@ -915,74 +984,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#09090b",
   },
-  stylesList: {
-    gap: 10,
-  },
-  styleCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fafafa",
-    borderWidth: 1.5,
-    borderColor: "#e4e4e7",
-    borderRadius: 16,
-    padding: 14,
-  },
-  styleCardSelected: {
-    backgroundColor: "#ffffff",
-    borderColor: "#09090b",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  styleIconWrapper: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  styleIconEmoji: {
-    fontSize: 18,
-  },
-  styleInfo: {
-    flex: 1,
-  },
-  styleTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#09090b",
-  },
-  styleDesc: {
-    fontSize: 11,
-    color: "#71717a",
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#d4d4d8",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  radioCircleSelected: {
-    borderColor: "#09090b",
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#09090b",
-  },
   passWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -1007,13 +1008,89 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#09090b",
   },
+  devOtpPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#f4f4f5",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  devOtpText: {
+    fontSize: 12,
+    color: "#52525b",
+  },
+  otpInputContainer: {
+    position: "relative",
+    width: "100%",
+    marginBottom: 16,
+  },
+  otpBoxesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  otpBox: {
+    flex: 1,
+    height: 56,
+    maxWidth: 48,
+    borderRadius: 14,
+    backgroundColor: "#fafafa",
+    borderWidth: 1.5,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 3,
+  },
+  otpBoxFilled: {
+    backgroundColor: "#ffffff",
+    borderColor: "#09090b",
+  },
+  otpBoxActive: {
+    borderColor: "#09090b",
+    borderWidth: 2,
+    backgroundColor: "#ffffff",
+  },
+  otpDigitText: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#09090b",
+  },
+  realOtpInput: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    fontSize: 24,
+  },
+  resendContainer: {
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  resendTimerText: {
+    fontSize: 13,
+    color: "#71717a",
+  },
+  resendActionLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+    textDecorationLine: "underline",
+  },
   perkNoticeBox: {
     backgroundColor: "#fafafa",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e4e4e7",
     padding: 16,
-    marginTop: 10,
+    marginTop: 6,
   },
   perkTopRow: {
     flexDirection: "row",
@@ -1032,7 +1109,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   actionSection: {
-    marginTop: 8,
+    marginTop: 12,
   },
   continueBtn: {
     backgroundColor: "#09090b",

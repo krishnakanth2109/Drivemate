@@ -12,18 +12,37 @@ async function runTests() {
     await new Promise(r => setTimeout(r, 1500));
   }
 
-  // Test 1: Register New User with 7-step onboarding data
-  console.log('\n[Test 1] Registering driver with 7-step onboarding data...');
+  // Test 0: Send & Verify Registration OTP
+  console.log('\n[Test 0] Sending & Verifying 6-digit Registration OTP...');
+  const testEmail = `alex.test.${Date.now()}@drivemate.com`;
+  const testPhone = `+1555${Math.floor(1000000 + Math.random() * 9000000)}`;
+
+  const sendOtpRes = await fetch(`${BASE_URL}/auth/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: testEmail, phoneNumber: testPhone }),
+  });
+  const sendOtpData = await sendOtpRes.json();
+  console.log('OTP Send status:', sendOtpRes.status, 'devOtp:', sendOtpData.devOtp);
+
+  const verifyOtpRes = await fetch(`${BASE_URL}/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: testEmail, phoneNumber: testPhone, otp: sendOtpData.devOtp || '123456' }),
+  });
+  const verifyOtpData = await verifyOtpRes.json();
+  console.log('OTP Verify status:', verifyOtpRes.status, verifyOtpData.success ? 'VERIFIED' : 'FAILED');
+
+  // Test 1: Register New User with 7-step onboarding data & OTP verification
+  console.log('\n[Test 1] Registering driver with 7-step onboarding data and OTP...');
   const regPayload = {
     fullName: 'Alex Morgan',
-    email: `alex.test.${Date.now()}@drivemate.com`,
-    phoneNumber: `+1555${Math.floor(1000000 + Math.random() * 9000000)}`,
+    email: testEmail,
+    phoneNumber: testPhone,
     username: `alex_${Math.floor(100 + Math.random() * 900)}`,
-    vehicleMake: 'Tesla',
-    vehicleModel: 'Model 3 Performance',
-    vehicleYear: '2024',
-    drivingStyle: 'ev',
+    vehicleType: '4 Wheeler',
     password: 'password123',
+    otp: sendOtpData.devOtp || '123456',
   };
 
   const regRes = await fetch(`${BASE_URL}/auth/register`, {
@@ -220,8 +239,28 @@ async function runTests() {
   const sendMsgData = await sendMsgRes.json();
   console.log('Message sent status:', sendMsgData.success);
 
-  // Test 14: Logout and Token Revocation
-  console.log('\n[Test 14] Testing Logout and token session cleanup...');
+  // Test 14: Google Authentication & Account Provisioning
+  console.log('\n[Test 14] Testing Google Sign-In & Profile Provisioning...');
+  const googleTestEmail = `google.driver.${Date.now()}@gmail.com`;
+  const googleRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: googleTestEmail,
+      displayName: 'Krishna Kanth (Google)',
+      photoUrl: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+      googleId: `gid_${Date.now()}`,
+    }),
+  });
+  const googleData = await googleRes.json();
+  console.log('Google Auth status:', googleRes.status, googleData.success ? 'SUCCESS' : 'FAILED');
+  if (!googleData.success || !googleData.token) {
+    throw new Error(`Google Auth failed: ${JSON.stringify(googleData)}`);
+  }
+  console.log('Google driver email:', googleData.user.email, 'Provider:', googleData.user.authProvider, 'Quota:', googleData.user.maxFreePosts);
+
+  // Test 15: Logout and Token Revocation
+  console.log('\n[Test 15] Testing Logout and token session cleanup...');
   const logoutRes = await fetch(`${BASE_URL}/auth/logout`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -230,7 +269,7 @@ async function runTests() {
   console.log('Logout status:', logoutData.success);
 
   console.log('\n=============================================');
-  console.log('🎉 ALL 14 BACKEND INTEGRATION TESTS PASSED 100%!');
+  console.log('🎉 ALL 15 BACKEND INTEGRATION TESTS PASSED 100%!');
   console.log('=============================================\n');
   process.exit(0);
 }

@@ -97,7 +97,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
 export const authAPI = {
   /**
-   * Register with 7-step onboarding data
+   * Register with 7-step onboarding data and OTP verification
    */
   async register(data: {
     fullName: string;
@@ -110,6 +110,7 @@ export const authAPI = {
     vehicleYear?: string;
     drivingStyle?: string;
     password: string;
+    otp?: string;
   }) {
     const res = await request<{ token: string; user: StoredUserProfile }>(
       "/auth/register",
@@ -128,6 +129,34 @@ export const authAPI = {
   },
 
   /**
+   * Dispatch 6-digit OTP code to email / phone
+   */
+  async sendOtp(params: { email?: string; phoneNumber?: string }) {
+    return await request<{ devOtp?: string; target?: string }>(
+      "/auth/send-otp",
+      {
+        method: "POST",
+        requiresAuth: false,
+        body: JSON.stringify(params),
+      }
+    );
+  },
+
+  /**
+   * Verify 6-digit OTP code
+   */
+  async verifyOtp(params: { email?: string; phoneNumber?: string; otp: string }) {
+    return await request(
+      "/auth/verify-otp",
+      {
+        method: "POST",
+        requiresAuth: false,
+        body: JSON.stringify(params),
+      }
+    );
+  },
+
+  /**
    * Sign in with email and password
    */
   async login(email: string, password: string) {
@@ -137,6 +166,32 @@ export const authAPI = {
         method: "POST",
         requiresAuth: false,
         body: JSON.stringify({ email, password }),
+      }
+    );
+
+    if (res.success && res.token && res.user) {
+      await saveAuthToken(res.token);
+      await saveUserProfile(res.user);
+    }
+    return res;
+  },
+
+  /**
+   * Authenticate / Login with Google account
+   */
+  async googleLogin(params: {
+    email: string;
+    displayName?: string;
+    photoUrl?: string;
+    googleId?: string;
+    idToken?: string;
+  }) {
+    const res = await request<{ token: string; user: StoredUserProfile }>(
+      "/auth/google",
+      {
+        method: "POST",
+        requiresAuth: false,
+        body: JSON.stringify(params),
       }
     );
 

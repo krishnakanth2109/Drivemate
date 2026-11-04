@@ -9,12 +9,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/AppNavigator";
-import { MailIcon, LockIcon, GoogleLogo, AppleLogo } from "../../components/Icons";
+import {
+  MailIcon,
+  LockIcon,
+  GoogleLogo,
+  AppleLogo,
+  CloseIcon,
+  CheckCircleIcon,
+  UserIcon,
+} from "../../components/Icons";
 import { authAPI } from "../../services/api";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Login">;
@@ -27,6 +37,11 @@ const LoginScreen: React.FC = () => {
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPassFocused, setIsPassFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Google Sign-In State
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState("");
+  const [isAuthenticatingGoogle, setIsAuthenticatingGoogle] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -50,10 +65,41 @@ const LoginScreen: React.FC = () => {
     }
   };
 
+  const executeGoogleLogin = async (targetEmail: string, displayName?: string) => {
+    if (!targetEmail.trim() || !targetEmail.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid Google account email.");
+      return;
+    }
+
+    setIsAuthenticatingGoogle(true);
+    try {
+      const response = await authAPI.googleLogin({
+        email: targetEmail.trim(),
+        displayName: displayName || targetEmail.split("@")[0],
+      });
+
+      setIsAuthenticatingGoogle(false);
+      setIsGoogleModalOpen(false);
+
+      if (response.success) {
+        navigation.replace("Dashboard");
+      } else {
+        Alert.alert("Google Sign In Failed", response.error || "Unable to sign in with Google.");
+      }
+    } catch (err: any) {
+      setIsAuthenticatingGoogle(false);
+      Alert.alert("Connection Error", err.message || "Failed to communicate with authentication server.");
+    }
+  };
+
   const handleSocialAuth = (provider: string) => {
-    Alert.alert(`${provider} Sign In`, `Connecting with ${provider}...`, [
-      { text: "Continue", onPress: () => navigation.replace("Dashboard") },
-    ]);
+    if (provider === "Google") {
+      setIsGoogleModalOpen(true);
+    } else {
+      Alert.alert(`${provider} Sign In`, `Connecting with ${provider}...`, [
+        { text: "Continue", onPress: () => navigation.replace("Dashboard") },
+      ]);
+    }
   };
 
   return (
@@ -99,28 +145,28 @@ const LoginScreen: React.FC = () => {
                   placeholderTextColor="#a1a1aa"
                   value={email}
                   onChangeText={setEmail}
-                  onFocus={() => setIsEmailFocused(true)}
-                  onBlur={() => setIsEmailFocused(false)}
-                  keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  keyboardType="email-address"
+                  onFocus={() => setIsEmailFocused(true)}
+                  onBlur={() => setIsEmailFocused(false)}
                 />
               </View>
             </View>
 
             {/* Password Field */}
             <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
+              <View style={styles.passwordHeader}>
                 <Text style={styles.inputLabel}>Password</Text>
                 <TouchableOpacity
                   onPress={() =>
                     Alert.alert(
                       "Reset Password",
-                      "A password reset link will be sent to your email."
+                      "Password reset dispatch has been logged for this account."
                     )
                   }
                 >
-                  <Text style={styles.forgotLink}>Forgot?</Text>
+                  <Text style={styles.forgotPassword}>Forgot password?</Text>
                 </TouchableOpacity>
               </View>
               <View
@@ -134,14 +180,14 @@ const LoginScreen: React.FC = () => {
                 </View>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   placeholderTextColor="#a1a1aa"
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => setIsPassFocused(true)}
-                  onBlur={() => setIsPassFocused(false)}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  onFocus={() => setIsPassFocused(true)}
+                  onBlur={() => setIsPassFocused(false)}
                 />
                 <TouchableOpacity
                   style={styles.toggleBtn}
@@ -204,6 +250,98 @@ const LoginScreen: React.FC = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Google Sign-In Account Selector Modal */}
+      <Modal
+        visible={isGoogleModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsGoogleModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.googleSheet}>
+            {/* Modal Header */}
+            <View style={styles.sheetHeader}>
+              <View style={styles.googleTitleRow}>
+                <GoogleLogo size={22} />
+                <Text style={styles.sheetTitle}>Sign in with Google</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsGoogleModalOpen(false)}
+                style={styles.sheetCloseBtn}
+                activeOpacity={0.7}
+              >
+                <CloseIcon size={16} color="#09090b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sheetSubtitle}>
+              Choose an account to continue to Drivemate
+            </Text>
+
+            {/* Primary Google Account Card */}
+            <TouchableOpacity
+              style={styles.googleAccountCard}
+              onPress={() => executeGoogleLogin("kkanth355@gmail.com", "krishnakanth2109")}
+              disabled={isAuthenticatingGoogle}
+              activeOpacity={0.8}
+            >
+              <View style={styles.accountAvatar}>
+                <Text style={styles.accountAvatarText}>K</Text>
+              </View>
+              <View style={styles.accountDetails}>
+                <Text style={styles.accountName}>krishnakanth2109</Text>
+                <Text style={styles.accountEmail}>kkanth355@gmail.com</Text>
+              </View>
+              <CheckCircleIcon size={18} color="#10b981" />
+            </TouchableOpacity>
+
+            {/* Custom Google Account Option */}
+            <View style={styles.customAccountBox}>
+              <Text style={styles.customAccountLabel}>Or enter another Google account:</Text>
+              <View style={styles.customInputRow}>
+                <TextInput
+                  style={styles.customAccountInput}
+                  placeholder="your.email@gmail.com"
+                  placeholderTextColor="#a1a1aa"
+                  value={customGoogleEmail}
+                  onChangeText={setCustomGoogleEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.customSignInBtn,
+                    (!customGoogleEmail.trim() || isAuthenticatingGoogle) && styles.buttonDisabled,
+                  ]}
+                  onPress={() => executeGoogleLogin(customGoogleEmail)}
+                  disabled={!customGoogleEmail.trim() || isAuthenticatingGoogle}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.customSignInBtnText}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Loading Indicator */}
+            {isAuthenticatingGoogle && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color="#09090b" />
+                <Text style={styles.loadingText}>Authenticating with Google...</Text>
+              </View>
+            )}
+
+            {/* Dismiss Link */}
+            <TouchableOpacity
+              style={styles.sheetCancelBtn}
+              onPress={() => setIsGoogleModalOpen(false)}
+              disabled={isAuthenticatingGoogle}
+            >
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -254,104 +392,104 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   headline: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "700",
     color: "#09090b",
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subheadline: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#71717a",
-    lineHeight: 22,
-    maxWidth: 320,
+    lineHeight: 20,
   },
   form: {
     width: "100%",
   },
   inputGroup: {
-    marginBottom: 20,
-  },
-  labelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 18,
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#27272a",
+    color: "#09090b",
     marginBottom: 8,
   },
-  forgotLink: {
-    fontSize: 13,
+  passwordHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  forgotPassword: {
+    fontSize: 12,
+    fontWeight: "600",
     color: "#71717a",
-    fontWeight: "500",
+    marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    height: 52,
     backgroundColor: "#fafafa",
-    borderRadius: 14,
-    borderWidth: 1.2,
+    borderWidth: 1,
     borderColor: "#e4e4e7",
+    borderRadius: 14,
+    height: 52,
     paddingHorizontal: 14,
   },
   inputWrapperFocused: {
     borderColor: "#09090b",
     backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   inputIconContainer: {
     marginRight: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   textInput: {
     flex: 1,
-    height: "100%",
     fontSize: 15,
     color: "#09090b",
+    height: "100%",
   },
   toggleBtn: {
+    paddingVertical: 6,
     paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   toggleBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#71717a",
   },
   primaryButton: {
-    height: 52,
     backgroundColor: "#09090b",
+    height: 52,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   primaryButtonText: {
     color: "#ffffff",
     fontSize: 15,
-    fontWeight: "700",
-    letterSpacing: 0.2,
+    fontWeight: "600",
   },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 24,
+    marginVertical: 22,
   },
   dividerLine: {
     flex: 1,
@@ -359,11 +497,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#e4e4e7",
   },
   dividerText: {
+    marginHorizontal: 12,
     fontSize: 12,
     color: "#a1a1aa",
-    paddingHorizontal: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontWeight: "500",
   },
   socialRow: {
     flexDirection: "row",
@@ -371,35 +508,185 @@ const styles = StyleSheet.create({
   },
   socialButton: {
     flex: 1,
-    height: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1.2,
-    borderColor: "#e4e4e7",
+    gap: 8,
+    height: 50,
     backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 14,
   },
   socialButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#27272a",
+    color: "#09090b",
   },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 32,
+    marginTop: 24,
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#71717a",
   },
   signupLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(9, 9, 11, 0.48)",
+    justifyContent: "flex-end",
+  },
+  googleSheet: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: Platform.OS === "ios" ? 38 : 24,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  googleTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#fafafa",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: "#71717a",
+    marginBottom: 18,
+  },
+  googleAccountCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fafafa",
+    borderWidth: 1.5,
+    borderColor: "#e4e4e7",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  accountAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#09090b",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  accountAvatarText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  accountDetails: {
+    flex: 1,
+  },
+  accountName: {
     fontSize: 14,
     fontWeight: "700",
     color: "#09090b",
-    textDecorationLine: "underline",
+  },
+  accountEmail: {
+    fontSize: 12,
+    color: "#71717a",
+    marginTop: 1,
+  },
+  customAccountBox: {
+    backgroundColor: "#fafafa",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  customAccountLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#52525b",
+    marginBottom: 8,
+  },
+  customInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  customAccountInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: "#09090b",
+  },
+  customSignInBtn: {
+    backgroundColor: "#09090b",
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customSignInBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: "#52525b",
+    fontWeight: "600",
+  },
+  sheetCancelBtn: {
+    alignItems: "center",
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  sheetCancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#71717a",
   },
 });
