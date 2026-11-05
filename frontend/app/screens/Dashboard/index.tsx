@@ -13,10 +13,9 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/AppNavigator";
 import BottomBar, { TabKey } from "../../components/BottomBar";
-import Sidebar from "../../components/Sidebar";
 import CreatePostModal, { PostItem } from "../../components/CreatePostModal";
 import PaymentModal from "../../components/PaymentModal";
-import { MenuIcon, PlusIcon, SparklesIcon } from "../../components/Icons";
+import { PlusIcon, SparklesIcon } from "../../components/Icons";
 import { authAPI, postsAPI, billingAPI } from "../../services/api";
 import { getUserProfile } from "../../services/storage";
 import { logScreenView, logPostCreation } from "../../services/analytics";
@@ -32,7 +31,6 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Dashboard">
 const Dashboard: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [currentTab, setCurrentTab] = useState<TabKey>("home");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -269,18 +267,6 @@ const Dashboard: React.FC = () => {
       {/* Top App Header */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.headerIconButton}
-            onPress={() => {
-              console.log("🍔 [Dashboard] Opening sidebar drawer");
-              setIsSidebarOpen(true);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-          >
-            <MenuIcon size={22} color="#09090b" />
-          </TouchableOpacity>
-
           <View style={styles.brandContainer}>
             <View style={styles.logoPill}>
               <Text style={styles.logoPillText}>DM</Text>
@@ -370,31 +356,6 @@ const Dashboard: React.FC = () => {
         hasNewUpdates={true}
       />
 
-      {/* Sidebar Drawer */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        onNavigateTab={(tab) => {
-          setCurrentTab(tab);
-          setIsSidebarOpen(false);
-        }}
-        onOpenCreatePost={() => {
-          setIsSidebarOpen(false);
-          handleOpenCreatePost();
-        }}
-        onOpenPaymentModal={() => {
-          setIsSidebarOpen(false);
-          setIsPaymentModalOpen(true);
-        }}
-        onSignOut={handleSignOut}
-        freePostsUsed={freePostsUsed}
-        maxFreePosts={MAX_FREE_POSTS}
-        singlePasses={singlePasses}
-        isProUser={isProUser}
-        userName={userName}
-        userEmail={userEmail}
-      />
-
       {/* Create Post Modal */}
       <CreatePostModal
         visible={isCreatePostOpen}
@@ -443,16 +404,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-  },
-  headerIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#fafafa",
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
-    alignItems: "center",
-    justifyContent: "center",
   },
   brandContainer: {
     flexDirection: "row",
