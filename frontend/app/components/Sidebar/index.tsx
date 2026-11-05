@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Easing,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -51,120 +52,102 @@ const Sidebar: React.FC<SidebarProps> = ({
   maxFreePosts,
   isProUser,
   singlePasses = 0,
-  userName = "Alex Morgan",
-  userEmail = "alex@drivemate.com",
+  userName = "Driver",
+  userEmail = "",
 }) => {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = Math.min((windowWidth || 360) * 0.82, 320);
 
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const slideAnim = useRef(new Animated.Value(-320)).current;
+  const slideAnim = useRef(new Animated.Value(-drawerWidth)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  // Sync open state with smooth slide & fade in
   useEffect(() => {
-    console.log("📑 [Sidebar State Change]", {
-      isOpen,
-      drawerWidth,
-      userName,
-      userEmail,
-      isProUser,
-      freePostsUsed,
-      singlePasses,
-    });
+    console.log("📑 [Sidebar Drawer]", { isOpen, drawerWidth, userName, userEmail });
 
     if (isOpen) {
-      setShouldRender(true);
       slideAnim.setValue(-drawerWidth);
       opacityAnim.setValue(0);
 
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
-          duration: 250,
+          duration: 220,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start();
-    } else if (shouldRender) {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: -drawerWidth,
-          duration: 220,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setShouldRender(false);
-        console.log("📑 [Sidebar] Drawer collapsed and hidden");
-      });
     }
   }, [isOpen, drawerWidth]);
 
-  // Smooth slide out and collapse handler
-  const handleClose = useCallback(
-    (callback?: () => void) => {
-      console.log("📑 [Sidebar] Closing drawer via action or backdrop");
+  const handleClose = (callback?: () => void) => {
+    console.log("📑 [Sidebar] Collapsing drawer");
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: -drawerWidth,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       onClose();
       if (callback) {
-        setTimeout(callback, 230);
+        setTimeout(callback, 80);
       }
-    },
-    [onClose]
-  );
-
-  if (!isOpen && !shouldRender) {
-    return null;
-  }
+    });
+  };
 
   const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
 
   return (
-    <View
-      style={styles.overlay}
-      pointerEvents={isOpen ? "auto" : "none"}
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="none"
+      onRequestClose={() => handleClose()}
+      statusBarTranslucent
     >
-      {/* Backdrop: tapping outside the drawer smoothly collapses it */}
-      <Animated.View
-        style={[
-          styles.backdrop,
-          {
-            opacity: opacityAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => handleClose()}
-        />
-      </Animated.View>
+      <View style={styles.modalRoot}>
+        {/* Backdrop: tapping outside the drawer collapses it */}
+        <Animated.View
+          style={[
+            styles.backdrop,
+            {
+              opacity: opacityAnim,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => handleClose()}
+          />
+        </Animated.View>
 
-      {/* Drawer Panel */}
-      <Animated.View
-        style={[
-          styles.drawer,
-          {
-            width: drawerWidth,
-            paddingTop: insets.top + (Platform.OS === "ios" ? 12 : 20),
-            paddingBottom: Math.max(insets.bottom, 20),
-            transform: [{ translateX: slideAnim }],
-          },
-        ]}
-      >
+        {/* Drawer Panel */}
+        <Animated.View
+          style={[
+            styles.drawer,
+            {
+              width: drawerWidth,
+              paddingTop: insets.top + (Platform.OS === "ios" ? 12 : 20),
+              paddingBottom: Math.max(insets.bottom, 20),
+              transform: [{ translateX: slideAnim }],
+            },
+          ]}
+        >
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.drawerScroll}
@@ -179,15 +162,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
-                    {userName.charAt(0).toUpperCase()}
+                    {(userName || "D").charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName} numberOfLines={1}>
-                    {userName}
+                    {userName || "Driver Profile"}
                   </Text>
                   <Text style={styles.profileEmail} numberOfLines={1}>
-                    {userEmail}
+                    {userEmail || "View garage & settings"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -196,7 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onPress={() => handleClose()}
                 style={styles.closeBtn}
                 activeOpacity={0.7}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
               >
                 <CloseIcon size={16} color="#09090b" />
               </TouchableOpacity>
@@ -341,20 +324,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           </ScrollView>
         </Animated.View>
       </View>
-    );
+    </Modal>
+  );
 };
 
 export default Sidebar;
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 99999,
-    elevation: 99999,
+  modalRoot: {
+    flex: 1,
   },
   backdrop: {
     position: "absolute",
@@ -362,7 +340,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(9, 9, 11, 0.45)",
+    backgroundColor: "rgba(9, 9, 11, 0.48)",
   },
   drawer: {
     position: "absolute",
@@ -378,7 +356,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 20,
     elevation: 28,
-    zIndex: 100000,
   },
   drawerScroll: {
     flexGrow: 1,

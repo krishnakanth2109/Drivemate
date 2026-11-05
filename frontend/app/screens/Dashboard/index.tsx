@@ -272,8 +272,8 @@ const Dashboard: React.FC = () => {
           <TouchableOpacity
             style={styles.headerIconButton}
             onPress={() => {
-              console.log("🍔 [Dashboard] Toggling sidebar drawer. Current state:", isSidebarOpen);
-              setIsSidebarOpen((prev) => !prev);
+              console.log("🍔 [Dashboard] Opening sidebar drawer");
+              setIsSidebarOpen(true);
             }}
             activeOpacity={0.7}
             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}

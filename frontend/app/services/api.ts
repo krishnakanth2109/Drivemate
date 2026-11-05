@@ -484,6 +484,44 @@ export const billingAPI = {
 
 // ================= MESSAGES API =================
 
+export interface DriverProfile {
+  uid: string;
+  fullName: string;
+  username: string;
+  email: string;
+  location: string;
+  drivingStyle: string;
+  vehicleName: string;
+  connectionStatus?: "none" | "pending" | "accepted" | "declined";
+  connectionRequestId?: string;
+  isSender?: boolean;
+}
+
+export interface ConnectionRequestItem {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  fromUserTag: string;
+  toUserId: string;
+  toUserName: string;
+  toUserTag: string;
+  status: "pending" | "accepted" | "declined";
+  roomId: string;
+  createdAt: string;
+}
+
+export interface ConversationItem {
+  id: string;
+  roomId: string;
+  name: string;
+  tag: string;
+  partnerId?: string;
+  isGroup: boolean;
+  lastMessage: string;
+  lastTime: string;
+  unreadCount: number;
+}
+
 export const messagesAPI = {
   async getMessages(roomId = "drivemate-hq") {
     return await request<{ messages: any[] }>(`/messages?roomId=${roomId}`, {
@@ -497,6 +535,52 @@ export const messagesAPI = {
       method: "POST",
       requiresAuth: true,
       body: JSON.stringify({ text, roomId }),
+    });
+  },
+
+  async getDrivers() {
+    return await request<{ drivers: DriverProfile[] }>("/messages/drivers", {
+      method: "GET",
+      requiresAuth: true,
+    });
+  },
+
+  async getRequests() {
+    return await request<{ incoming: ConnectionRequestItem[]; outgoing: ConnectionRequestItem[] }>(
+      "/messages/requests",
+      {
+        method: "GET",
+        requiresAuth: true,
+      }
+    );
+  },
+
+  async sendRequest(targetUserId: string) {
+    return await request<{ connection: ConnectionRequestItem; message: string }>(
+      "/messages/requests/send",
+      {
+        method: "POST",
+        requiresAuth: true,
+        body: JSON.stringify({ targetUserId }),
+      }
+    );
+  },
+
+  async respondRequest(requestId: string, action: "accept" | "decline") {
+    return await request<{ connection: ConnectionRequestItem; message: string }>(
+      "/messages/requests/respond",
+      {
+        method: "POST",
+        requiresAuth: true,
+        body: JSON.stringify({ requestId, action }),
+      }
+    );
+  },
+
+  async getConversations() {
+    return await request<{ conversations: ConversationItem[] }>("/messages/conversations", {
+      method: "GET",
+      requiresAuth: true,
     });
   },
 };

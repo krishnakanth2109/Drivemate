@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -22,7 +24,10 @@ import {
   HelpCircleIcon,
   FileTextIcon,
   UserIcon,
+  PlusIcon,
 } from "../../../components/Icons";
+import { authAPI, vehiclesAPI, postsAPI, billingAPI } from "../../../services/api";
+import { getUserProfile, StoredUserProfile } from "../../../services/storage";
 
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,68 +46,125 @@ interface ProfileTabProps {
 const ProfileTab: React.FC<ProfileTabProps> = ({
   onOpenPaymentModal,
   onSignOut,
-  freePostsUsed,
-  maxFreePosts,
-  isProUser,
-  singlePasses = 0,
-  totalPostsCreated,
-  userName = "Alex Morgan",
-  userEmail = "alex@drivemate.com",
+  freePostsUsed: fallbackFreeUsed,
+  maxFreePosts: fallbackMaxFree,
+  isProUser: fallbackIsPro,
+  singlePasses: fallbackSinglePasses = 0,
+  totalPostsCreated: fallbackPostsCount,
+  userName: fallbackName = "Driver",
+  userEmail: fallbackEmail = "",
 }) => {
   const navigation = useNavigation<ProfileNavProp>();
-  const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
 
-  React.useEffect(() => {
-    console.log("👤 [ProfileTab Data Displayed]", {
-      userName,
-      userEmail,
-      isProUser,
-      freePostsUsed,
-      maxFreePosts,
-      singlePasses,
-      totalPostsCreated,
-    });
-  }, [userName, userEmail, isProUser, freePostsUsed, maxFreePosts, singlePasses, totalPostsCreated]);
+  const [profile, setProfile] = useState<StoredUserProfile | null>(null);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [userPostsCount, setUserPostsCount] = useState<number>(fallbackPostsCount);
+  const [totalLikesCount, setTotalLikesCount] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Fetch complete profile, garage vehicles, and user posts live from backend
+  const fetchBackendData = async () => {
+    try {
+      // 1. Fetch Profile
+      const cached = await getUserProfile();
+      if (cached) setProfile(cached);
+
+      const profileRes = await authAPI.getProfile();
+      if (profileRes.success && profileRes.user) {
+        setProfile(profileRes.user);
+      }
+
+      // 2. Fetch Garage Vehicles
+      const vehiclesRes = await vehiclesAPI.getVehicles();
+      if (vehiclesRes.success && Array.isArray(vehiclesRes.vehicles)) {
+        setVehicles(vehiclesRes.vehicles);
+      }
+
+      // 3. Fetch Posts to count user's published posts & accumulated likes
+      const postsRes = await postsAPI.getPosts();
+      if (postsRes.success && Array.isArray(postsRes.posts)) {
+        const activeName = (profileRes.user?.fullName || cached?.fullName || fallbackName).toLowerCase();
+        const myPosts = postsRes.posts.filter((p: any) =>
+          p.author?.toLowerCase() === activeName || p.authorTag?.toLowerCase() === `@${profileRes.user?.username?.toLowerCase()}`
+        );
+        setUserPostsCount(myPosts.length);
+        const likes = myPosts.reduce((acc: number, p: any) => acc + (p.likes || 0), 0);
+        setTotalLikesCount(likes);
+      }
+    } catch (err: any) {
+      console.warn("⚠️ [ProfileTab] Error fetching backend profile data:", err?.message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackendData();
+  }, []);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchBackendData();
+  };
+
+  // Derive active values prioritizing fresh backend data
+  const displayName = profile?.fullName || fallbackName || "Drivemate Driver";
+  const displayEmail = profile?.email || fallbackEmail || "driver@drivemate.com";
+  const displayUsername = profile?.username ? `@${profile.username}` : "@driver";
+  const isPro = typeof profile?.isProUser === "boolean" ? profile.isProUser : fallbackIsPro;
+  const freeUsed = typeof profile?.freePostsUsed === "number" ? profile.freePostsUsed : fallbackFreeUsed;
+  const maxFree = typeof profile?.maxFreePosts === "number" ? profile.maxFreePosts : fallbackMaxFree;
+  const passes = typeof profile?.singlePasses === "number" ? profile.singlePasses : fallbackSinglePasses;
+  const freeRemaining = Math.max(0, maxFree - freeUsed);
+
+  // Primary vehicle
+  const primaryVehicle = vehicles.find((v) => v.isPrimary) || vehicles[0] || null;
 
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#09090b" />
+      }
     >
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarWrapper}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {userName.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </Text>
           </View>
           <TouchableOpacity
             style={styles.editBadge}
             onPress={() => navigation.navigate("EditProfile")}
             activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <EditIcon size={12} color="#ffffff" />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.name}>{userName}</Text>
-        <Text style={styles.email}>{userEmail}</Text>
+        <Text style={styles.name}>{displayName}</Text>
+        <Text style={styles.email}>{displayEmail}</Text>
 
         <View style={styles.planBadge}>
           <SparklesIcon size={12} color="#09090b" />
           <Text style={styles.planBadgeText}>
-            {isProUser ? "PRO MEMBER" : "FREE TIER PLAN"}
+            {isPro ? "PRO MEMBER" : "FREE TIER PLAN"}
           </Text>
         </View>
 
-        {/* Stats Row */}
+        {/* Live Backend Stats Row */}
         <View style={styles.statsRow}>
           <TouchableOpacity
             style={styles.statBox}
             onPress={() => navigation.navigate("MyPosts")}
           >
-            <Text style={styles.statNumber}>{totalPostsCreated}</Text>
+            <Text style={styles.statNumber}>{userPostsCount}</Text>
             <Text style={styles.statLabel}>Posts</Text>
           </TouchableOpacity>
 
@@ -112,7 +174,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             style={styles.statBox}
             onPress={() => navigation.navigate("MyVehicles")}
           >
-            <Text style={styles.statNumber}>2</Text>
+            <Text style={styles.statNumber}>{vehicles.length}</Text>
             <Text style={styles.statLabel}>Vehicles</Text>
           </TouchableOpacity>
 
@@ -122,7 +184,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             style={styles.statBox}
             onPress={() => navigation.navigate("MyPosts")}
           >
-            <Text style={styles.statNumber}>42</Text>
+            <Text style={styles.statNumber}>{totalLikesCount}</Text>
             <Text style={styles.statLabel}>Likes</Text>
           </TouchableOpacity>
         </View>
@@ -134,25 +196,25 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           <Text style={styles.sectionTitle}>Posting Allowance</Text>
           <TouchableOpacity onPress={() => navigation.navigate("Billing")}>
             <Text style={styles.sectionActionText}>
-              {isProUser ? "Billing" : "Upgrade"}
+              {isPro ? "Billing" : "Upgrade"}
             </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.planNotice}>
-          {isProUser
+          {isPro
             ? "You are on Drivemate Pro with unlimited community posts and verified priority."
-            : singlePasses > 0
-            ? `Free tier includes 2 posts (${freePostsUsed}/${maxFreePosts} used). You have ${singlePasses} paid post pass active.`
-            : `Free tier includes 2 posts. You have used ${freePostsUsed} of ${maxFreePosts} free posts.`}
+            : passes > 0
+            ? `Free tier includes ${maxFree} posts (${freeUsed}/${maxFree} used). You have ${passes} paid post pass active.`
+            : `Free tier includes ${maxFree} posts. You have used ${freeUsed} of ${maxFree} free posts.`}
         </Text>
 
-        {!isProUser && (
+        {!isPro && (
           <View style={styles.progressContainer}>
             <View
               style={[
                 styles.progressBar,
-                { width: `${Math.min(100, (freePostsUsed / maxFreePosts) * 100)}%` },
+                { width: `${Math.min(100, (freeUsed / Math.max(1, maxFree)) * 100)}%` },
               ]}
             />
           </View>
@@ -165,12 +227,12 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         >
           <CreditCardIcon size={16} color="#ffffff" />
           <Text style={styles.upgradeBtnText}>
-            {isProUser ? "Manage Subscription" : "Upgrade to Pro ($9.99/mo)"}
+            {isPro ? "Manage Subscription" : "Upgrade to Pro ($9.99/mo)"}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Primary Vehicle Quick Card */}
+      {/* Primary Vehicle Quick Card (Fetched from Backend Garage) */}
       <TouchableOpacity
         style={styles.sectionCard}
         onPress={() => navigation.navigate("MyVehicles")}
@@ -181,19 +243,39 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           <Text style={styles.sectionActionText}>Manage Garage →</Text>
         </View>
 
-        <View style={styles.vehicleRow}>
-          <View style={styles.vehicleIcon}>
-            <Text style={styles.vehicleIconText}>🚗</Text>
+        {primaryVehicle ? (
+          <View style={styles.vehicleRow}>
+            <View style={styles.vehicleIcon}>
+              <Text style={styles.vehicleIconText}>
+                {primaryVehicle.type?.toLowerCase().includes("motor") ? "🏍️" : "🚗"}
+              </Text>
+            </View>
+            <View style={styles.vehicleDetails}>
+              <Text style={styles.vehicleName}>
+                {primaryVehicle.year ? `${primaryVehicle.year} ` : ""}
+                {primaryVehicle.name}
+              </Text>
+              <Text style={styles.vehiclePlate}>
+                Plate: {primaryVehicle.plate || "No plate entered"} • {primaryVehicle.batteryOrFuel || "Online"}
+              </Text>
+            </View>
+            <View style={styles.vehicleStatusPill}>
+              <CheckCircleIcon size={13} color="#10b981" />
+              <Text style={styles.vehicleStatusText}>Garage</Text>
+            </View>
           </View>
-          <View style={styles.vehicleDetails}>
-            <Text style={styles.vehicleName}>2024 Tesla Model 3</Text>
-            <Text style={styles.vehiclePlate}>Plate: 9DM-774 • 82% Battery</Text>
+        ) : (
+          <View style={styles.emptyVehicleBox}>
+            <CarIcon size={24} color="#71717a" />
+            <Text style={styles.emptyVehicleText}>
+              No vehicle registered yet. Tap to add your car or motorcycle.
+            </Text>
+            <View style={styles.addVehicleBadge}>
+              <PlusIcon size={12} color="#09090b" />
+              <Text style={styles.addVehicleBadgeText}>Add Vehicle</Text>
+            </View>
           </View>
-          <View style={styles.vehicleStatusPill}>
-            <CheckCircleIcon size={13} color="#10b981" />
-            <Text style={styles.vehicleStatusText}>Live Sync</Text>
-          </View>
-        </View>
+        )}
       </TouchableOpacity>
 
       {/* Account Navigation Menu */}
@@ -211,7 +293,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
           <View style={styles.menuInfo}>
             <Text style={styles.menuTitle}>Edit Personal Details</Text>
-            <Text style={styles.menuSub}>Name, username, email, phone & bio</Text>
+            <Text style={styles.menuSub}>
+              {displayUsername} • {profile?.location || "Update city & bio"}
+            </Text>
           </View>
           <ChevronRightIcon size={18} color="#a1a1aa" />
         </TouchableOpacity>
@@ -229,7 +313,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
           <View style={styles.menuInfo}>
             <Text style={styles.menuTitle}>My Garage & Vehicles</Text>
-            <Text style={styles.menuSub}>2 registered cars & live OBD telematics</Text>
+            <Text style={styles.menuSub}>
+              {vehicles.length === 0
+                ? "No registered vehicles yet"
+                : `${vehicles.length} vehicle${vehicles.length === 1 ? "" : "s"} registered in garage`}
+            </Text>
           </View>
           <ChevronRightIcon size={18} color="#a1a1aa" />
         </TouchableOpacity>
@@ -247,7 +335,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
           <View style={styles.menuInfo}>
             <Text style={styles.menuTitle}>Membership & Billing</Text>
-            <Text style={styles.menuSub}>Pro membership, passes & invoices</Text>
+            <Text style={styles.menuSub}>
+              {isPro ? "Pro Member Active" : `${passes} single pass${passes === 1 ? "" : "es"} available`}
+            </Text>
           </View>
           <ChevronRightIcon size={18} color="#a1a1aa" />
         </TouchableOpacity>
@@ -265,7 +355,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
           <View style={styles.menuInfo}>
             <Text style={styles.menuTitle}>My Posts & Activity</Text>
-            <Text style={styles.menuSub}>Published updates, liked posts & comments</Text>
+            <Text style={styles.menuSub}>
+              {userPostsCount} published posts • {totalLikesCount} likes received
+            </Text>
           </View>
           <ChevronRightIcon size={18} color="#a1a1aa" />
         </TouchableOpacity>
@@ -307,7 +399,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Settings & Sign Out */}
+      {/* Sign Out Action */}
       <TouchableOpacity
         style={styles.signOutBtn}
         onPress={() => {
@@ -549,6 +641,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#18181b",
+  },
+  emptyVehicleBox: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  emptyVehicleText: {
+    fontSize: 13,
+    color: "#71717a",
+    textAlign: "center",
+  },
+  addVehicleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fafafa",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  addVehicleBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#09090b",
   },
   menuSectionHeader: {
     fontSize: 14,
