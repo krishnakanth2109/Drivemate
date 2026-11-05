@@ -74,13 +74,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           toValue: 0,
           duration: 220,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 220,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     }
@@ -93,18 +93,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         toValue: -drawerWidth,
         duration: 180,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 180,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       onClose();
       if (callback) {
-        setTimeout(callback, 80);
+        setTimeout(callback, 50);
       }
     });
   };

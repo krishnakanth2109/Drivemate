@@ -222,7 +222,7 @@ const LoginScreen: React.FC = () => {
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Minimalist Google Sign-In (Pure white theme, no Apple logo) */}
+            {/* Minimalist Google Sign-In */}
             <TouchableOpacity
               style={styles.googleFullButton}
               onPress={handleOpenGoogleAuth}
