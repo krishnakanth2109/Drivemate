@@ -530,11 +530,28 @@ export const messagesAPI = {
     });
   },
 
-  async sendMessage(text: string, roomId = "drivemate-hq") {
+  async sendMessage(
+    payload:
+      | string
+      | {
+          text?: string;
+          roomId?: string;
+          msgType?: "text" | "photo" | "location" | "voice" | "pdf";
+          mediaUrl?: string;
+          locationData?: { latitude: number; longitude: number; address: string };
+          fileMeta?: { fileName?: string; fileSize?: string; mimeType?: string; duration?: string };
+        },
+    defaultRoomId = "drivemate-hq"
+  ) {
+    const body =
+      typeof payload === "string"
+        ? { text: payload, roomId: defaultRoomId }
+        : { roomId: defaultRoomId, ...payload };
+
     return await request("/messages", {
       method: "POST",
       requiresAuth: true,
-      body: JSON.stringify({ text, roomId }),
+      body: JSON.stringify(body),
     });
   },
 
@@ -555,13 +572,13 @@ export const messagesAPI = {
     );
   },
 
-  async sendRequest(targetUserId: string) {
+  async sendRequest(targetUserId: string, targetName?: string, targetTag?: string) {
     return await request<{ connection: ConnectionRequestItem; message: string }>(
       "/messages/requests/send",
       {
         method: "POST",
         requiresAuth: true,
-        body: JSON.stringify({ targetUserId }),
+        body: JSON.stringify({ targetUserId, targetName, targetTag }),
       }
     );
   },
@@ -601,6 +618,31 @@ export const analyticsAPI = {
   },
 };
 
+// ================= CLOUDINARY MEDIA API =================
+
+export const mediaAPI = {
+  /**
+   * Upload photos, voice notes, or PDFs/documents directly to Cloudinary
+   */
+  async uploadMedia(params: {
+    fileData: string;
+    fileType: "photo" | "voice" | "pdf";
+    fileName?: string;
+  }) {
+    return await request<{
+      mediaUrl: string;
+      publicId: string;
+      format: string;
+      fileType: string;
+      fileName: string;
+    }>("/media/upload", {
+      method: "POST",
+      requiresAuth: true,
+      body: JSON.stringify(params),
+    });
+  },
+};
+
 export default {
   auth: authAPI,
   posts: postsAPI,
@@ -608,5 +650,6 @@ export default {
   billing: billingAPI,
   messages: messagesAPI,
   analytics: analyticsAPI,
+  media: mediaAPI,
 };
 

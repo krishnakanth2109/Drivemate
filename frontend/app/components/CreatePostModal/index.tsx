@@ -15,6 +15,7 @@ import { CloseIcon, LinkIcon, SparklesIcon, CarIcon } from "../Icons";
 
 export interface PostItem {
   id: string;
+  userId?: string;
   author: string;
   authorTag: string;
   timeAgo: string;

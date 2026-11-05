@@ -378,3 +378,60 @@ export const MotorcycleIcon: React.FC<IconProps> = ({ size = 20, color = "#09090
     <Path d="M16 6H18" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+
+export const MapPinIcon: React.FC<IconProps> = ({ size = 20, color = "#09090b" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 10C21 17 12 23 12 23C12 23 3 17 3 10C3 7.61305 3.94821 5.32387 5.63604 3.63604C7.32387 1.94821 9.61305 1 12 1C14.3869 1 16.6761 1.94821 18.364 3.63604C20.0518 5.32387 21 7.61305 21 10Z"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Circle cx="12" cy="10" r="3" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+export const MicIcon: React.FC<IconProps> = ({ size = 20, color = "#09090b" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const PaperclipIcon: React.FC<IconProps> = ({ size = 20, color = "#09090b" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+      stroke={color}
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const PlayIcon: React.FC<IconProps> = ({ size = 20, color = "#09090b" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M5 3L19 12L5 21V3Z" fill={color} />
+  </Svg>
+);
+
+export const PauseIcon: React.FC<IconProps> = ({ size = 20, color = "#09090b" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x="6" y="4" width="4" height="16" fill={color} rx="1" />
+    <Rect x="14" y="4" width="4" height="16" fill={color} rx="1" />
+  </Svg>
+);

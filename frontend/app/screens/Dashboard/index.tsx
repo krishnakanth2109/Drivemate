@@ -336,6 +336,7 @@ const Dashboard: React.FC = () => {
             onToggleLike={handleToggleLike}
             onOpenCreatePost={handleOpenCreatePost}
             onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+            onNavigateTab={(tab) => setCurrentTab(tab)}
             freePostsUsed={freePostsUsed}
             maxFreePosts={MAX_FREE_POSTS}
             singlePasses={singlePasses}

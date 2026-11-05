@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Image } from "react-native";
 
 interface UpdateItem {
   id: string;
@@ -7,6 +7,7 @@ interface UpdateItem {
   title: string;
   date: string;
   summary: string;
+  photoUrl: string;
 }
 
 const UPDATES_DATA: UpdateItem[] = [
@@ -17,6 +18,8 @@ const UPDATES_DATA: UpdateItem[] = [
     date: "Just Now",
     summary:
       "All members receive 2 free community posts with instant Pro subscription unlocks for high-frequency posters and clubs.",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224155-8d04cb21cd6c",
   },
   {
     id: "2",
@@ -25,6 +28,8 @@ const UPDATES_DATA: UpdateItem[] = [
     date: "2 hours ago",
     summary:
       "Southbound lane closures reported between exit 24 and 29. Expect minor delays during peak evening hours.",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1519817650390-64a93db51149",
   },
   {
     id: "3",
@@ -33,6 +38,8 @@ const UPDATES_DATA: UpdateItem[] = [
     date: "Yesterday",
     summary:
       "Join 40+ local drivers this Saturday at Skyline Viewpoint. Route sharing, coffee, and battery charging stalls available.",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1503376780353-7e6692767b70",
   },
   {
     id: "4",
@@ -41,6 +48,8 @@ const UPDATES_DATA: UpdateItem[] = [
     date: "3 days ago",
     summary:
       "OBD-II sync algorithms now calculate real-time fuel efficiency and predictive battery health degradation notifications.",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1563720223185-11003d516935",
   },
 ];
 
@@ -66,20 +75,31 @@ const UpdatesTab: React.FC = () => {
           key={update.id}
           style={styles.card}
           onPress={() => handleItemPress(update)}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <View style={styles.cardTop}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{update.category}</Text>
+          {/* Cloudinary Visual Banner */}
+          <View style={styles.imageWrapper}>
+            <Image
+              source={{ uri: update.photoUrl }}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            <View style={styles.categoryPill}>
+              <Text style={styles.categoryPillText}>{update.category.toUpperCase()}</Text>
             </View>
-            <Text style={styles.dateText}>{update.date}</Text>
           </View>
 
-          <Text style={styles.updateTitle}>{update.title}</Text>
-          <Text style={styles.updateSummary}>{update.summary}</Text>
+          <View style={styles.cardContent}>
+            <View style={styles.cardTop}>
+              <Text style={styles.dateText}>{update.date}</Text>
+            </View>
 
-          <View style={styles.cardBottom}>
-            <Text style={styles.readMoreText}>Read details →</Text>
+            <Text style={styles.updateTitle}>{update.title}</Text>
+            <Text style={styles.updateSummary}>{update.summary}</Text>
+
+            <View style={styles.cardBottom}>
+              <Text style={styles.readMoreText}>Read details →</Text>
+            </View>
           </View>
         </TouchableOpacity>
       ))}
@@ -110,57 +130,77 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 12,
+    borderRadius: 20,
+    marginBottom: 16,
     borderWidth: 1.2,
     borderColor: "#e4e4e7",
+    overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  imageWrapper: {
+    width: "100%",
+    height: 160,
+    position: "relative",
+    backgroundColor: "#f4f4f5",
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  categoryPill: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    backgroundColor: "rgba(9, 9, 11, 0.78)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  categoryPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 0.6,
+  },
+  cardContent: {
+    padding: 18,
   },
   cardTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: "#fafafa",
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#09090b",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    justifyContent: "flex-end",
+    marginBottom: 6,
   },
   dateText: {
     fontSize: 11,
     color: "#a1a1aa",
+    fontWeight: "500",
   },
   updateTitle: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
     color: "#09090b",
     marginBottom: 6,
+    letterSpacing: -0.2,
+    lineHeight: 22,
   },
   updateSummary: {
     fontSize: 13,
     color: "#52525b",
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 19,
+    marginBottom: 14,
   },
   cardBottom: {
     borderTopWidth: 1,
     borderTopColor: "#f4f4f5",
-    paddingTop: 10,
+    paddingTop: 12,
   },
   readMoreText: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#09090b",
   },
 });

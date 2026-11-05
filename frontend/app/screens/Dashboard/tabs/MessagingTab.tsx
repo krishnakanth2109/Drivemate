@@ -11,6 +11,9 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Image,
+  Modal,
+  Linking,
 } from "react-native";
 import {
   MessageIcon,
@@ -21,6 +24,13 @@ import {
   PlusIcon,
   ChevronRightIcon,
   ArrowLeftIcon,
+  CameraIcon,
+  MapPinIcon,
+  MicIcon,
+  PaperclipIcon,
+  PlayIcon,
+  PauseIcon,
+  FileTextIcon,
 } from "../../../components/Icons";
 import { getSocket } from "../../../services/socket";
 import {
@@ -40,6 +50,19 @@ interface ChatMessage {
   time: string;
   roomId?: string;
   status?: string;
+  msgType?: "text" | "photo" | "location" | "voice" | "pdf";
+  mediaUrl?: string;
+  locationData?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  fileMeta?: {
+    fileName?: string;
+    fileSize?: string;
+    mimeType?: string;
+    duration?: string;
+  };
 }
 
 type TabMode = "chats" | "requests" | "discover";
@@ -53,6 +76,24 @@ const MessagingTab: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
+
+  // Media Attachment State
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
+
+  // Voice recording simulation state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+
+  // Custom Input State
+  const [customPhotoUrl, setCustomPhotoUrl] = useState("");
+  const [photoCaption, setPhotoCaption] = useState("");
+  const [customAddress, setCustomAddress] = useState("");
 
   // Requests state
   const [incomingRequests, setIncomingRequests] = useState<ConnectionRequestItem[]>([]);
@@ -68,6 +109,19 @@ const MessagingTab: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const scrollViewRef = useRef<any>(null);
+
+  // Recording Timer
+  useEffect(() => {
+    let timer: any;
+    if (isRecording) {
+      timer = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setRecordingSeconds(0);
+    }
+    return () => clearInterval(timer);
+  }, [isRecording]);
 
   // Load User Profile
   useEffect(() => {
@@ -174,57 +228,114 @@ const MessagingTab: React.FC = () => {
     loadConversationsAndRequests();
   };
 
-  // Send message in current active room
-  const handleSendMessage = async () => {
-    const textToSend = inputText.trim();
-    if (!textToSend || !activeConversation) return;
+  const togglePlayVoice = (msgId: string) => {
+    if (playingVoiceId === msgId) {
+      setPlayingVoiceId(null);
+    } else {
+      setPlayingVoiceId(msgId);
+      setTimeout(() => {
+        setPlayingVoiceId((curr) => (curr === msgId ? null : curr));
+      }, 5000);
+    }
+  };
 
-    setInputText("");
+  const handleSendRichMessage = async (payload: {
+    msgType: "text" | "photo" | "location" | "voice" | "pdf";
+    text?: string;
+    mediaUrl?: string;
+    locationData?: { latitude: number; longitude: number; address: string };
+    fileMeta?: { fileName?: string; fileSize?: string; mimeType?: string; duration?: string };
+  }) => {
+    if (!activeConversation) return;
 
     const senderName = userProfile?.fullName || "Drivemate Driver";
     const senderTag = userProfile?.username ? `@${userProfile.username}` : "@driver";
     const senderId = userProfile?.uid || "my_user_id";
     const roomId = activeConversation.roomId;
 
+    let defaultText = payload.text || "";
+    if (!defaultText) {
+      if (payload.msgType === "photo") defaultText = "📷 Shared a photo";
+      else if (payload.msgType === "location") defaultText = `📍 ${payload.locationData?.address || "Shared location pin"}`;
+      else if (payload.msgType === "voice") defaultText = "🎙️ Voice note";
+      else if (payload.msgType === "pdf") defaultText = `📄 ${payload.fileMeta?.fileName || "Shared PDF document"}`;
+    }
+
     const localMsg: ChatMessage = {
       id: `local_${Date.now()}`,
       senderId,
       senderName,
       senderTag,
-      text: textToSend,
+      text: defaultText,
+      msgType: payload.msgType,
+      mediaUrl: payload.mediaUrl,
+      locationData: payload.locationData,
+      fileMeta: payload.fileMeta,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       roomId,
       status: "sent",
     };
 
-    // Optimistic UI update
     setMessages((prev) => [...prev, localMsg]);
+    setIsAttachmentMenuOpen(false);
+    setIsPhotoModalOpen(false);
+    setIsLocationModalOpen(false);
+    setIsVoiceModalOpen(false);
+    setIsPdfModalOpen(false);
+    setIsRecording(false);
+    setCustomPhotoUrl("");
+    setPhotoCaption("");
+    setCustomAddress("");
+
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 60);
 
-    // Broadcast via socket
     const socket = getSocket();
     socket.emit("send_message", {
-      text: textToSend,
+      ...payload,
+      text: defaultText,
       senderName,
       senderTag,
       senderId,
       roomId,
     });
 
-    // Persist via REST
     try {
-      await messagesAPI.sendMessage(textToSend, roomId);
-      // Update snippet in conversations list
+      await messagesAPI.sendMessage(
+        {
+          roomId,
+          text: defaultText,
+          msgType: payload.msgType,
+          mediaUrl: payload.mediaUrl,
+          locationData: payload.locationData,
+          fileMeta: payload.fileMeta,
+        },
+        roomId
+      );
+
       setConversations((prev) =>
         prev.map((c) =>
           c.roomId === roomId
-            ? { ...c, lastMessage: textToSend, lastTime: "Just now" }
+            ? { ...c, lastMessage: defaultText, lastTime: "Just now" }
             : c
         )
       );
-    } catch {}
+    } catch (err: any) {
+      console.warn("Error persisting rich message:", err.message);
+    }
+  };
+
+  // Send message in current active room
+  const handleSendMessage = async () => {
+    const textToSend = inputText.trim();
+    if (!textToSend || !activeConversation) return;
+
+    setInputText("");
+    await handleSendRichMessage({
+      msgType: "text",
+      text: textToSend,
+    });
   };
 
   // Send Connection Request to Driver
@@ -367,9 +478,130 @@ const MessagingTab: React.FC = () => {
                         </View>
                       )}
 
-                      <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
-                        {item.text}
-                      </Text>
+                      {/* 1. Photo Message */}
+                      {item.msgType === "photo" && item.mediaUrl ? (
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setZoomPhotoUrl(item.mediaUrl!)}
+                          style={styles.bubbleMediaContainer}
+                        >
+                          <Image
+                            source={{ uri: item.mediaUrl }}
+                            style={styles.bubblePhoto}
+                            resizeMode="cover"
+                          />
+                          {item.text && item.text !== "📷 Shared a photo" ? (
+                            <Text style={[styles.bubbleCaption, isMe && styles.bubbleCaptionMe]}>
+                              {item.text}
+                            </Text>
+                          ) : null}
+                        </TouchableOpacity>
+                      ) : item.msgType === "location" ? (
+                        /* 2. Location Message */
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            const lat = item.locationData?.latitude || 37.7749;
+                            const lon = item.locationData?.longitude || -122.4194;
+                            Linking.openURL(`https://maps.google.com/?q=${lat},${lon}`).catch(() => {
+                              Alert.alert("Waypoint Location", item.locationData?.address || "Pinned waypoint");
+                            });
+                          }}
+                          style={[styles.locationCard, isMe && styles.locationCardMe]}
+                        >
+                          <View style={styles.locationHeaderRow}>
+                            <MapPinIcon size={15} color={isMe ? "#ffffff" : "#09090b"} />
+                            <Text style={[styles.locationBadge, isMe && styles.locationBadgeMe]}>
+                              LIVE WAYPOINT PIN
+                            </Text>
+                          </View>
+                          <Text style={[styles.locationAddress, isMe && styles.locationAddressMe]}>
+                            {item.locationData?.address || item.text}
+                          </Text>
+                          {item.locationData?.latitude && item.locationData?.longitude ? (
+                            <Text style={[styles.locationCoords, isMe && styles.locationCoordsMe]}>
+                              {item.locationData.latitude.toFixed(4)}° N, {item.locationData.longitude.toFixed(4)}° W
+                            </Text>
+                          ) : null}
+                          <View style={[styles.locationActionPill, isMe && styles.locationActionPillMe]}>
+                            <Text style={[styles.locationActionText, isMe && styles.locationActionTextMe]}>
+                              Open in Maps ↗
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ) : item.msgType === "voice" ? (
+                        /* 3. Voice Memo Message */
+                        <View style={[styles.voiceCard, isMe && styles.voiceCardMe]}>
+                          <TouchableOpacity
+                            style={[styles.playButton, isMe && styles.playButtonMe]}
+                            onPress={() => togglePlayVoice(item.id)}
+                            activeOpacity={0.8}
+                          >
+                            {playingVoiceId === item.id ? (
+                              <PauseIcon size={13} color={isMe ? "#09090b" : "#ffffff"} />
+                            ) : (
+                              <PlayIcon size={13} color={isMe ? "#09090b" : "#ffffff"} />
+                            )}
+                          </TouchableOpacity>
+                          <View style={styles.waveformContainer}>
+                            <View style={styles.waveformBars}>
+                              {[40, 70, 30, 90, 60, 100, 45, 80, 55, 95, 35, 75, 50, 85].map((h, idx) => (
+                                <View
+                                  key={idx}
+                                  style={[
+                                    styles.waveBar,
+                                    { height: (h / 100) * 20 },
+                                    isMe && styles.waveBarMe,
+                                    playingVoiceId === item.id && styles.waveBarActive,
+                                  ]}
+                                />
+                              ))}
+                            </View>
+                            <View style={styles.voiceMetaRow}>
+                              <Text style={[styles.voiceDuration, isMe && styles.voiceDurationMe]}>
+                                {item.fileMeta?.duration || "0:14"}
+                              </Text>
+                              <Text style={[styles.voiceLabel, isMe && styles.voiceLabelMe]}>
+                                {playingVoiceId === item.id ? "Playing Voice Memo..." : "Voice Memo"}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : item.msgType === "pdf" ? (
+                        /* 4. PDF Document Message */
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            Alert.alert(
+                              "PDF Document",
+                              `Viewing: ${item.fileMeta?.fileName || "Document.pdf"}\nSize: ${item.fileMeta?.fileSize || "180 KB"}\nVerified by Drivemate.`
+                            );
+                          }}
+                          style={[styles.pdfCard, isMe && styles.pdfCardMe]}
+                        >
+                          <View style={styles.pdfIconBadge}>
+                            <FileTextIcon size={18} color="#ef4444" />
+                          </View>
+                          <View style={styles.pdfInfo}>
+                            <Text style={[styles.pdfName, isMe && styles.pdfNameMe]} numberOfLines={1}>
+                              {item.fileMeta?.fileName || "Document.pdf"}
+                            </Text>
+                            <Text style={[styles.pdfMeta, isMe && styles.pdfMetaMe]}>
+                              {item.fileMeta?.fileSize || "180 KB"} • PDF Document
+                            </Text>
+                          </View>
+                          <View style={[styles.pdfActionPill, isMe && styles.pdfActionPillMe]}>
+                            <Text style={[styles.pdfActionText, isMe && styles.pdfActionTextMe]}>
+                              View ↗
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ) : (
+                        /* Standard Text Message */
+                        <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
+                          {item.text}
+                        </Text>
+                      )}
 
                       <Text style={[styles.timestamp, isMe && styles.timestampMe]}>
                         {item.time}
@@ -382,8 +614,77 @@ const MessagingTab: React.FC = () => {
           </ScrollView>
         )}
 
+        {/* Attachment Options Drawer */}
+        {isAttachmentMenuOpen && (
+          <View style={styles.attachmentBar}>
+            <TouchableOpacity
+              style={styles.attachmentOption}
+              onPress={() => {
+                setIsAttachmentMenuOpen(false);
+                setIsPhotoModalOpen(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={styles.attachmentIconCircle}>
+                <CameraIcon size={18} color="#09090b" />
+              </View>
+              <Text style={styles.attachmentOptionText}>Photo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.attachmentOption}
+              onPress={() => {
+                setIsAttachmentMenuOpen(false);
+                setIsLocationModalOpen(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={styles.attachmentIconCircle}>
+                <MapPinIcon size={18} color="#09090b" />
+              </View>
+              <Text style={styles.attachmentOptionText}>Location</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.attachmentOption}
+              onPress={() => {
+                setIsAttachmentMenuOpen(false);
+                setIsVoiceModalOpen(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={styles.attachmentIconCircle}>
+                <MicIcon size={18} color="#09090b" />
+              </View>
+              <Text style={styles.attachmentOptionText}>Voice Memo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.attachmentOption}
+              onPress={() => {
+                setIsAttachmentMenuOpen(false);
+                setIsPdfModalOpen(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={styles.attachmentIconCircle}>
+                <FileTextIcon size={18} color="#09090b" />
+              </View>
+              <Text style={styles.attachmentOptionText}>PDF Doc</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Bar */}
         <View style={styles.inputBar}>
+          <TouchableOpacity
+            style={[styles.attachButton, isAttachmentMenuOpen && styles.attachButtonActive]}
+            onPress={() => setIsAttachmentMenuOpen((prev) => !prev)}
+            activeOpacity={0.75}
+          >
+            <PaperclipIcon size={18} color={isAttachmentMenuOpen ? "#09090b" : "#71717a"} />
+          </TouchableOpacity>
+
           <TextInput
             style={styles.textInput}
             placeholder={`Message ${activeConversation.name}...`}
@@ -407,6 +708,366 @@ const MessagingTab: React.FC = () => {
             <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Photo Selection Modal */}
+        <Modal
+          visible={isPhotoModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsPhotoModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCardContainer}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalCardTitle}>Share Photo</Text>
+                <TouchableOpacity
+                  onPress={() => setIsPhotoModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <CloseIcon size={18} color="#09090b" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Select Cloudinary Road Photo or provide image URL:
+              </Text>
+
+              {/* Photo Presets Grid */}
+              <View style={styles.photoGrid}>
+                {[
+                  {
+                    title: "Rocklin Supercharger",
+                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
+                  },
+                  {
+                    title: "Donner Snow Highway",
+                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1498084393753-b411b2d26b34?w=800",
+                  },
+                  {
+                    title: "Rivian Mountain Run",
+                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800",
+                  },
+                  {
+                    title: "Pacific Coast Highway",
+                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800",
+                  },
+                ].map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.photoCardChoice}
+                    onPress={() => {
+                      handleSendRichMessage({
+                        msgType: "photo",
+                        mediaUrl: item.url,
+                        text: photoCaption.trim() || `📷 ${item.title}`,
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Image source={{ uri: item.url }} style={styles.photoCardThumbnail} />
+                    <Text style={styles.photoCardChoiceText} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Optional photo caption..."
+                placeholderTextColor="#a1a1aa"
+                value={photoCaption}
+                onChangeText={setPhotoCaption}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* Location Waypoint Modal */}
+        <Modal
+          visible={isLocationModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsLocationModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCardContainer}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalCardTitle}>Share Location Pin</Text>
+                <TouchableOpacity
+                  onPress={() => setIsLocationModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <CloseIcon size={18} color="#09090b" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Select verified Carpool meeting waypoint:
+              </Text>
+
+              <View style={styles.locationPresetsList}>
+                {[
+                  {
+                    address: "SF Bay Bridge Carpool Point",
+                    region: "San Francisco, CA",
+                    latitude: 37.7955,
+                    longitude: -122.3937,
+                  },
+                  {
+                    address: "Seattle Pioneer Square Hub",
+                    region: "Seattle, WA",
+                    latitude: 47.6022,
+                    longitude: -122.3338,
+                  },
+                  {
+                    address: "Austin Tech Ridge Park & Ride",
+                    region: "Austin, TX",
+                    latitude: 30.3957,
+                    longitude: -97.6834,
+                  },
+                  {
+                    address: "Tahoe Donner Summit Rest Area",
+                    region: "Truckee, CA",
+                    latitude: 39.3153,
+                    longitude: -120.3297,
+                  },
+                ].map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.locationPresetItem}
+                    onPress={() => {
+                      handleSendRichMessage({
+                        msgType: "location",
+                        locationData: {
+                          address: `${item.address}, ${item.region}`,
+                          latitude: item.latitude,
+                          longitude: item.longitude,
+                        },
+                        text: `📍 Waypoint: ${item.address}`,
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.locationItemIconCircle}>
+                      <MapPinIcon size={16} color="#09090b" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.locationPresetTitle}>{item.address}</Text>
+                      <Text style={styles.locationPresetSub}>{item.region}</Text>
+                    </View>
+                    <Text style={styles.locationSendArrow}>Send ↗</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Voice Note Modal */}
+        <Modal
+          visible={isVoiceModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsVoiceModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCardContainer}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalCardTitle}>Voice Memo Dispatch</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsVoiceModalOpen(false);
+                    setIsRecording(false);
+                  }}
+                  style={styles.modalCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <CloseIcon size={18} color="#09090b" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Record Mic Area */}
+              <View style={styles.voiceRecorderArea}>
+                <TouchableOpacity
+                  style={[styles.bigMicButton, isRecording && styles.bigMicButtonRecording]}
+                  onPress={() => setIsRecording((prev) => !prev)}
+                  activeOpacity={0.85}
+                >
+                  <MicIcon size={28} color="#ffffff" />
+                </TouchableOpacity>
+
+                <Text style={styles.recordingTimerText}>
+                  {isRecording
+                    ? `Recording: 0:${recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}`
+                    : "Tap microphone to record road dispatch"}
+                </Text>
+
+                {isRecording && (
+                  <TouchableOpacity
+                    style={styles.voiceDispatchSendBtn}
+                    onPress={() => {
+                      const duration = `0:${recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}`;
+                      handleSendRichMessage({
+                        msgType: "voice",
+                        fileMeta: {
+                          duration,
+                          fileName: "Live_Road_Dispatch.m4a",
+                          fileSize: "96 KB",
+                        },
+                        text: `🎙️ Voice Memo (${duration})`,
+                      });
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.voiceDispatchSendBtnText}>Stop & Send Voice Memo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={styles.modalSubtitle}>Or choose quick voice alert:</Text>
+              <View style={styles.quickVoiceList}>
+                {[
+                  { title: "Donner Pass Snow & Chain Alert", duration: "0:14" },
+                  { title: "Carpool Pickup: Arriving in 5 Mins", duration: "0:09" },
+                  { title: "Highway Traffic Moving Smoothly", duration: "0:18" },
+                ].map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.quickVoiceItem}
+                    onPress={() => {
+                      handleSendRichMessage({
+                        msgType: "voice",
+                        fileMeta: {
+                          duration: item.duration,
+                          fileName: `${item.title.replace(/\s+/g, "_")}.m4a`,
+                          fileSize: "112 KB",
+                        },
+                        text: `🎙️ ${item.title}`,
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <PlayIcon size={14} color="#09090b" />
+                    <Text style={styles.quickVoiceItemText} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.quickVoiceItemDuration}>{item.duration}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* PDF Document Modal */}
+        <Modal
+          visible={isPdfModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsPdfModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCardContainer}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalCardTitle}>Attach PDF Document</Text>
+                <TouchableOpacity
+                  onPress={() => setIsPdfModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <CloseIcon size={18} color="#09090b" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Select verified vehicle document or route manifest:
+              </Text>
+
+              <View style={styles.pdfList}>
+                {[
+                  {
+                    name: "Tahoe_Carpool_Route_Manifest.pdf",
+                    size: "245 KB",
+                    desc: "Certified Route & Stop Schedule",
+                  },
+                  {
+                    name: "Vehicle_Safety_Inspection_Certificate.pdf",
+                    size: "180 KB",
+                    desc: "Annual 50-Point Road Inspection",
+                  },
+                  {
+                    name: "EV_Supercharging_Tax_Invoice.pdf",
+                    size: "95 KB",
+                    desc: "Official Tesla Charging Receipt",
+                  },
+                  {
+                    name: "Rideshare_Commercial_Insurance_Proof.pdf",
+                    size: "310 KB",
+                    desc: "Active Commercial Coverage Policy",
+                  },
+                ].map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.pdfListItem}
+                    onPress={() => {
+                      handleSendRichMessage({
+                        msgType: "pdf",
+                        fileMeta: {
+                          fileName: item.name,
+                          fileSize: item.size,
+                          mimeType: "application/pdf",
+                        },
+                        text: `📄 ${item.name}`,
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.pdfItemIconCircle}>
+                      <FileTextIcon size={18} color="#ef4444" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pdfItemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.pdfItemDesc}>
+                        {item.size} • {item.desc}
+                      </Text>
+                    </View>
+                    <Text style={styles.pdfSendArrow}>Attach ↗</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Full Image Preview Zoom Modal */}
+        <Modal
+          visible={Boolean(zoomPhotoUrl)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setZoomPhotoUrl(null)}
+        >
+          <View style={styles.zoomModalOverlay}>
+            <TouchableOpacity
+              style={styles.zoomCloseBtn}
+              onPress={() => setZoomPhotoUrl(null)}
+              activeOpacity={0.8}
+            >
+              <CloseIcon size={20} color="#ffffff" />
+            </TouchableOpacity>
+            {zoomPhotoUrl && (
+              <Image
+                source={{ uri: zoomPhotoUrl }}
+                style={styles.zoomFullImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     );
   }
@@ -1259,5 +1920,489 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 13,
     fontWeight: "700",
+  },
+  attachButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  attachButtonActive: {
+    backgroundColor: "#e4e4e7",
+    borderColor: "#09090b",
+  },
+  attachmentBar: {
+    flexDirection: "row",
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#f4f4f5",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: "space-between",
+  },
+  attachmentOption: {
+    alignItems: "center",
+    gap: 4,
+  },
+  attachmentIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fafafa",
+    borderWidth: 1.2,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  attachmentOptionText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#52525b",
+  },
+  bubbleMediaContainer: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginVertical: 4,
+    maxWidth: 240,
+  },
+  bubblePhoto: {
+    width: 240,
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: "#e4e4e7",
+  },
+  bubbleCaption: {
+    fontSize: 13,
+    color: "#18181b",
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  bubbleCaptionMe: {
+    color: "#ffffff",
+  },
+  locationCard: {
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    minWidth: 200,
+    maxWidth: 250,
+    marginVertical: 4,
+  },
+  locationCardMe: {
+    backgroundColor: "#18181b",
+    borderColor: "#27272a",
+  },
+  locationHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  locationBadge: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#09090b",
+    letterSpacing: 0.8,
+  },
+  locationBadgeMe: {
+    color: "#e4e4e7",
+  },
+  locationAddress: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+    marginBottom: 4,
+  },
+  locationAddressMe: {
+    color: "#ffffff",
+  },
+  locationCoords: {
+    fontSize: 11,
+    color: "#71717a",
+    marginBottom: 8,
+  },
+  locationCoordsMe: {
+    color: "#a1a1aa",
+  },
+  locationActionPill: {
+    backgroundColor: "#09090b",
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    alignItems: "center",
+  },
+  locationActionPillMe: {
+    backgroundColor: "#ffffff",
+  },
+  locationActionText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  locationActionTextMe: {
+    color: "#09090b",
+  },
+  voiceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4,
+    minWidth: 180,
+  },
+  voiceCardMe: {
+    //
+  },
+  playButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#09090b",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playButtonMe: {
+    backgroundColor: "#ffffff",
+  },
+  waveformContainer: {
+    flex: 1,
+  },
+  waveformBars: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    height: 22,
+    marginBottom: 4,
+  },
+  waveBar: {
+    width: 3,
+    backgroundColor: "#a1a1aa",
+    borderRadius: 2,
+  },
+  waveBarMe: {
+    backgroundColor: "#71717a",
+  },
+  waveBarActive: {
+    backgroundColor: "#10b981",
+  },
+  voiceMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  voiceDuration: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#52525b",
+  },
+  voiceDurationMe: {
+    color: "#e4e4e7",
+  },
+  voiceLabel: {
+    fontSize: 10,
+    color: "#a1a1aa",
+  },
+  voiceLabelMe: {
+    color: "#a1a1aa",
+  },
+  pdfCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    gap: 10,
+    minWidth: 210,
+    maxWidth: 260,
+    marginVertical: 4,
+  },
+  pdfCardMe: {
+    backgroundColor: "#18181b",
+    borderColor: "#27272a",
+  },
+  pdfIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#fee2e2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pdfInfo: {
+    flex: 1,
+  },
+  pdfName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#09090b",
+    marginBottom: 2,
+  },
+  pdfNameMe: {
+    color: "#ffffff",
+  },
+  pdfMeta: {
+    fontSize: 10,
+    color: "#71717a",
+  },
+  pdfMetaMe: {
+    color: "#a1a1aa",
+  },
+  pdfActionPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#f4f4f5",
+  },
+  pdfActionPillMe: {
+    backgroundColor: "#27272a",
+  },
+  pdfActionText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  pdfActionTextMe: {
+    color: "#ffffff",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
+  },
+  modalCardContainer: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    maxHeight: "80%",
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  modalCardTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#09090b",
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: "#71717a",
+    marginBottom: 14,
+  },
+  modalInput: {
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: "#09090b",
+    backgroundColor: "#fafafa",
+    marginTop: 12,
+  },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  photoCardChoice: {
+    width: "48%",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    backgroundColor: "#fafafa",
+    paddingBottom: 6,
+  },
+  photoCardThumbnail: {
+    width: "100%",
+    height: 85,
+    backgroundColor: "#e4e4e7",
+  },
+  photoCardChoiceText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#09090b",
+    paddingHorizontal: 8,
+    paddingTop: 6,
+  },
+  locationPresetsList: {
+    gap: 8,
+  },
+  locationPresetItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    backgroundColor: "#fafafa",
+    gap: 10,
+  },
+  locationItemIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationPresetTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  locationPresetSub: {
+    fontSize: 11,
+    color: "#71717a",
+    marginTop: 1,
+  },
+  locationSendArrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  voiceRecorderArea: {
+    alignItems: "center",
+    paddingVertical: 18,
+    backgroundColor: "#fafafa",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    marginBottom: 16,
+  },
+  bigMicButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#09090b",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  bigMicButtonRecording: {
+    backgroundColor: "#ef4444",
+  },
+  recordingTimerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#09090b",
+  },
+  voiceDispatchSendBtn: {
+    marginTop: 12,
+    backgroundColor: "#09090b",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  voiceDispatchSendBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  quickVoiceList: {
+    gap: 8,
+  },
+  quickVoiceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    backgroundColor: "#fafafa",
+    gap: 10,
+  },
+  quickVoiceItemText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#09090b",
+  },
+  quickVoiceItemDuration: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#71717a",
+  },
+  pdfList: {
+    gap: 8,
+  },
+  pdfListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    backgroundColor: "#fafafa",
+    gap: 10,
+  },
+  pdfItemIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#fee2e2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pdfItemName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  pdfItemDesc: {
+    fontSize: 10,
+    color: "#71717a",
+    marginTop: 1,
+  },
+  pdfSendArrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  zoomModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  zoomCloseBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  zoomFullImage: {
+    width: "92%",
+    height: "75%",
   },
 });

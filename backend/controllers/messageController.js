@@ -10,6 +10,7 @@ const INITIAL_MESSAGES = [
     senderTag: "@dispatch_hq",
     roomId: "drivemate-hq",
     text: "Welcome to Drivemate Driver Comms! Share live road conditions, speed traps, and carpool coordinates here.",
+    msgType: "text",
     time: "10:00 AM",
     status: "delivered",
   },
@@ -20,22 +21,83 @@ const INITIAL_MESSAGES = [
     senderTag: "@marcus_v",
     roomId: "drivemate-hq",
     text: "Hey drivers, anyone heading out toward Tahoe today? Donner Pass has light flurries, tire chains recommended.",
+    msgType: "text",
     time: "10:15 AM",
     status: "read",
   },
   {
     id: "m3",
-    senderId: "elena_r",
+    senderId: "driver_elena",
     senderName: "Elena Rostova",
     senderTag: "@elena_m3",
     roomId: "drivemate-hq",
-    text: "Thanks Marcus! Just passed Rocklin Supercharger. Plenty of open stalls right now.",
+    text: "Just pulled into Rocklin Supercharger. Plenty of open 250kW stalls right now!",
+    msgType: "photo",
+    mediaUrl: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
     time: "10:22 AM",
+    status: "read",
+  },
+  {
+    id: "m4",
+    senderId: "driver_devon",
+    senderName: "Devon Clark",
+    senderTag: "@devon_c",
+    roomId: "drivemate-hq",
+    text: "Carpool meeting spot at Austin Tech Ridge Transit Center.",
+    msgType: "location",
+    locationData: {
+      latitude: 30.3957,
+      longitude: -97.6834,
+      address: "Austin Tech Ridge Park & Ride, Austin, TX",
+    },
+    time: "10:30 AM",
+    status: "read",
+  },
+  {
+    id: "m5",
+    senderId: "driver_marcus",
+    senderName: "Marcus Vance",
+    senderTag: "@marcus_v",
+    roomId: "drivemate-hq",
+    text: "Voice report: Traffic moving smoothly past Truckee exit.",
+    msgType: "voice",
+    fileMeta: {
+      fileName: "Truckee_Road_Report.m4a",
+      duration: "0:14",
+      fileSize: "112 KB",
+      mimeType: "audio/mp4",
+    },
+    time: "10:34 AM",
+    status: "read",
+  },
+  {
+    id: "m6",
+    senderId: "driver_jordan",
+    senderName: "Jordan Lee",
+    senderTag: "@jordan_ev",
+    roomId: "drivemate-hq",
+    text: "Pacific Coast EV Route Manifest and Charging Schedule attached.",
+    msgType: "pdf",
+    fileMeta: {
+      fileName: "Pacific_Coast_Route_Manifest.pdf",
+      fileSize: "245 KB",
+      mimeType: "application/pdf",
+    },
+    time: "10:41 AM",
     status: "read",
   },
 ];
 
 const DEFAULT_DRIVERS = [
+  {
+    uid: "driver_jordan",
+    fullName: "Jordan Lee",
+    username: "jordan_ev",
+    email: "jordan@drivemate.com",
+    location: "San Francisco, CA",
+    drivingStyle: "EV Highway",
+    vehicleName: "2024 Tesla Model Y",
+  },
   {
     uid: "driver_elena",
     fullName: "Elena Rostova",
@@ -170,7 +232,7 @@ export const getRequests = async (req, res) => {
 export const sendRequest = async (req, res) => {
   try {
     const fromUser = req.user;
-    const { targetUserId } = req.body;
+    const { targetUserId, targetName: bodyName, targetTag: bodyTag } = req.body;
 
     if (!targetUserId || targetUserId === fromUser.uid) {
       return res.status(400).json({ success: false, error: 'Invalid target user ID.' });
@@ -181,8 +243,8 @@ export const sendRequest = async (req, res) => {
     if (!targetDriver) {
       targetDriver = DEFAULT_DRIVERS.find(d => d.uid === targetUserId);
     }
-    const targetName = targetDriver ? targetDriver.fullName : 'Driver';
-    const targetTag = targetDriver && targetDriver.username ? `@${targetDriver.username}` : '@driver';
+    const targetName = targetDriver ? targetDriver.fullName : (bodyName || 'Driver');
+    const targetTag = targetDriver && targetDriver.username ? `@${targetDriver.username}` : (bodyTag || '@driver');
 
     // Check if an existing request / connection is already present
     const existing = await Connection.findOne({
@@ -372,15 +434,32 @@ export const getMessages = async (req, res) => {
 };
 
 /**
- * Send message to a room (group or direct)
+ * Send message to a room (group or direct) - supports text, photos, location, voice memos, PDFs
  */
 export const sendMessage = async (req, res) => {
   try {
-    const { text, roomId = 'drivemate-hq' } = req.body;
+    const {
+      text = '',
+      roomId = 'drivemate-hq',
+      msgType = 'text',
+      mediaUrl = '',
+      locationData,
+      fileMeta,
+    } = req.body;
     const user = req.user;
 
-    if (!text || !text.trim()) {
-      return res.status(400).json({ success: false, error: 'Message cannot be empty.' });
+    const trimmedText = text.trim();
+    if (!trimmedText && !mediaUrl && !locationData) {
+      return res.status(400).json({ success: false, error: 'Message content or media attachment is required.' });
+    }
+
+    // Default friendly label if message is media-only
+    let displayText = trimmedText;
+    if (!displayText) {
+      if (msgType === 'photo') displayText = '📷 Shared a photo';
+      else if (msgType === 'voice') displayText = '🎙️ Voice note';
+      else if (msgType === 'pdf') displayText = `📄 Document: ${fileMeta?.fileName || 'PDF'}`;
+      else if (msgType === 'location') displayText = `📍 Location: ${locationData?.address || 'Pinned location'}`;
     }
 
     const newMessage = await Message.create({
@@ -389,13 +468,17 @@ export const sendMessage = async (req, res) => {
       senderName: user ? user.fullName : 'Guest Driver',
       senderTag: user && user.username ? `@${user.username}` : '@driver',
       roomId,
-      text: text.trim(),
+      text: displayText,
+      msgType,
+      mediaUrl,
+      locationData: locationData || undefined,
+      fileMeta: fileMeta || undefined,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'sent',
     });
 
     // Update connection timestamp so conversation sorts to top
-    if (roomId.startsWith('dm_')) {
+    if (roomId.startsWith('dm_') || roomId.includes('_dm_')) {
       await Connection.findOneAndUpdate({ roomId }, { $set: { updatedAt: new Date() } });
     }
 
@@ -407,6 +490,7 @@ export const sendMessage = async (req, res) => {
 
     return res.status(201).json({ success: true, message: newMessage });
   } catch (error) {
+    console.error('[sendMessage Error]:', error.message);
     return res.status(500).json({ success: false, error: 'Failed to send message.' });
   }
 };

@@ -17,6 +17,7 @@ import vehicleRoutes from './routes/vehicleRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import mediaRoutes from './routes/mediaRoutes.js';
 
 dotenv.config();
 
@@ -41,7 +42,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Initialize backend services
 await asyncStorage.init();
@@ -114,6 +116,7 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/media', mediaRoutes);
 
 // Root Welcome Endpoint
 app.get('/', (req, res) => {

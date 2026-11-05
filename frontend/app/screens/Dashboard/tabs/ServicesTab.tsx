@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
 } from "react-native";
 import { WrenchIcon, SparklesIcon, CheckCircleIcon } from "../../../components/Icons";
 
@@ -16,6 +17,7 @@ interface ServiceItem {
   description: string;
   badge?: string;
   status: "Available" | "Active" | "Configured";
+  photoUrl: string;
 }
 
 const SERVICES_DATA: ServiceItem[] = [
@@ -27,6 +29,8 @@ const SERVICES_DATA: ServiceItem[] = [
       "Towing, flat tire fix, battery jump-start, and emergency fuel delivery dispatched in minutes.",
     badge: "24/7 HOTLINE",
     status: "Active",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1619642751034-765dfdf7c58e",
   },
   {
     id: "2",
@@ -35,6 +39,8 @@ const SERVICES_DATA: ServiceItem[] = [
     description:
       "Secure encrypted storage for driver license, vehicle registration, and auto insurance cards.",
     status: "Configured",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1558494949-ef010cbdcc31",
   },
   {
     id: "3",
@@ -44,6 +50,8 @@ const SERVICES_DATA: ServiceItem[] = [
       "Real-time diagnostic trouble codes, brake wear estimations, and upcoming service schedules.",
     badge: "AI SCAN",
     status: "Available",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1486006920555-c77dce18193b",
   },
   {
     id: "4",
@@ -52,6 +60,8 @@ const SERVICES_DATA: ServiceItem[] = [
     description:
       "Find high-speed chargers with live availability, stall power ratings, and peak hour pricing.",
     status: "Available",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1593941707882-a5bba14938c7",
   },
   {
     id: "5",
@@ -60,6 +70,8 @@ const SERVICES_DATA: ServiceItem[] = [
     description:
       "Automatic mileage tracking, tax deduction reports, and multi-currency fuel receipts management.",
     status: "Available",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224154-26032ffc0d07",
   },
 ];
 
@@ -83,7 +95,7 @@ const ServicesTab: React.FC = () => {
         </Text>
       </View>
 
-      {/* Emergency Assistance Banner - Sleek Minimalist Luxury */}
+      {/* Emergency Assistance Banner */}
       <View style={styles.emergencyBanner}>
         <View style={styles.emergencyIcon}>
           <WrenchIcon size={20} color="#ffffff" />
@@ -114,35 +126,42 @@ const ServicesTab: React.FC = () => {
         <Text style={styles.sectionCount}>{SERVICES_DATA.length} active</Text>
       </View>
 
-      {/* Services List */}
+      {/* Services List with Cloudinary Media */}
       {SERVICES_DATA.map((service) => (
         <TouchableOpacity
           key={service.id}
           style={styles.card}
           onPress={() => handleServicePress(service)}
-          activeOpacity={0.7}
+          activeOpacity={0.85}
         >
-          <View style={styles.cardHeader}>
-            <View style={styles.titleArea}>
-              <Text style={styles.serviceCategory}>{service.category}</Text>
-              <Text style={styles.serviceTitle}>{service.title}</Text>
-            </View>
+          {/* Service Image Banner */}
+          <View style={styles.cardImageContainer}>
+            <Image
+              source={{ uri: service.photoUrl }}
+              style={styles.serviceImage}
+              resizeMode="cover"
+            />
             {service.badge && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{service.badge}</Text>
+              <View style={styles.badgePill}>
+                <Text style={styles.badgePillText}>{service.badge}</Text>
               </View>
             )}
+            <View style={styles.statusPill}>
+              <CheckCircleIcon size={12} color="#10b981" />
+              <Text style={styles.statusPillText}>{service.status}</Text>
+            </View>
           </View>
 
-          <Text style={styles.serviceDescription}>{service.description}</Text>
-
-          <View style={styles.cardFooter}>
-            <View style={styles.statusRow}>
-              <CheckCircleIcon size={14} color="#10b981" />
-              <Text style={styles.statusText}>{service.status}</Text>
+          <View style={styles.cardBody}>
+            <View style={styles.categoryRow}>
+              <Text style={styles.categoryText}>{service.category.toUpperCase()}</Text>
             </View>
-            <View style={styles.actionBtn}>
-              <Text style={styles.actionLink}>Open Service →</Text>
+
+            <Text style={styles.serviceTitle}>{service.title}</Text>
+            <Text style={styles.serviceDescription}>{service.description}</Text>
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.accessText}>Access Utility →</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -156,7 +175,7 @@ export default ServicesTab;
 const styles = StyleSheet.create({
   container: {
     padding: 18,
-    paddingBottom: 32,
+    paddingBottom: 28,
   },
   header: {
     marginBottom: 16,
@@ -165,12 +184,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     color: "#09090b",
-    letterSpacing: -0.4,
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 13,
     color: "#71717a",
-    marginTop: 3,
   },
   emergencyBanner: {
     flexDirection: "row",
@@ -179,22 +198,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#27272a",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
+    gap: 12,
   },
   emergencyIcon: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    backgroundColor: "#27272a",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
   },
   emergencyInfo: {
     flex: 1,
@@ -202,23 +214,22 @@ const styles = StyleSheet.create({
   emergencyTitle: {
     color: "#ffffff",
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   emergencySub: {
     color: "#a1a1aa",
     fontSize: 11,
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   sosButton: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#ef4444",
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderRadius: 10,
-    marginLeft: 10,
   },
   sosButtonText: {
-    color: "#09090b",
+    color: "#ffffff",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.5,
@@ -238,85 +249,97 @@ const styles = StyleSheet.create({
   sectionCount: {
     fontSize: 12,
     color: "#71717a",
-    fontWeight: "600",
+    fontWeight: "500",
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1.2,
     borderColor: "#e4e4e7",
+    overflow: "hidden",
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
+  cardImageContainer: {
+    width: "100%",
+    height: 140,
+    position: "relative",
+    backgroundColor: "#f4f4f5",
   },
-  titleArea: {
-    flex: 1,
+  serviceImage: {
+    width: "100%",
+    height: "100%",
   },
-  serviceCategory: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#71717a",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  serviceTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#09090b",
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: "#fafafa",
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
+  badgePill: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(9, 9, 11, 0.8)",
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
   },
-  badgeText: {
-    color: "#09090b",
+  badgePillText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  statusPill: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  statusPillText: {
     fontSize: 10,
     fontWeight: "700",
+    color: "#09090b",
+  },
+  cardBody: {
+    padding: 16,
+  },
+  categoryRow: {
+    marginBottom: 4,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#71717a",
+    letterSpacing: 0.5,
+  },
+  serviceTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#09090b",
+    marginBottom: 6,
+    letterSpacing: -0.2,
   },
   serviceDescription: {
     fontSize: 13,
     color: "#52525b",
-    lineHeight: 19,
-    marginBottom: 14,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: "#f4f4f5",
     paddingTop: 10,
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  statusText: {
+  accessText: {
     fontSize: 12,
-    color: "#18181b",
-    fontWeight: "600",
-  },
-  actionBtn: {
-    paddingVertical: 4,
-  },
-  actionLink: {
-    fontSize: 13,
     fontWeight: "700",
     color: "#09090b",
   },

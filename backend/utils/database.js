@@ -7,6 +7,7 @@ import { mongoose } from '../config/mongodb.js';
 const INITIAL_POSTS = [
   {
     id: "p1",
+    userId: "driver_jordan",
     author: "Jordan Lee",
     authorTag: "@jordan_ev",
     timeAgo: "25m ago",
@@ -25,6 +26,7 @@ const INITIAL_POSTS = [
   },
   {
     id: "p2",
+    userId: "driver_elena",
     author: "Elena Rostova",
     authorTag: "@elena_m3",
     timeAgo: "1h ago",
@@ -41,6 +43,7 @@ const INITIAL_POSTS = [
   },
   {
     id: "p3",
+    userId: "driver_safety",
     author: "Drivemate Road Safety",
     authorTag: "@drivemate_alerts",
     timeAgo: "2h ago",
@@ -55,6 +58,7 @@ const INITIAL_POSTS = [
   },
   {
     id: "p4",
+    userId: "driver_devon",
     author: "Devon Clark",
     authorTag: "@devon_c",
     timeAgo: "4h ago",
