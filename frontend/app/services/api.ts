@@ -160,6 +160,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
         return {
           success: false,
+          status: response.status,
           error: data.error || `Server responded with status ${response.status}`,
           ...data,
         };
@@ -173,6 +174,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
       return {
         success: true,
+        status: response.status,
         ...data,
       };
     } catch (err: any) {

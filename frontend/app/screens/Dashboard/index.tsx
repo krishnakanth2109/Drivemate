@@ -90,6 +90,7 @@ const Dashboard: React.FC = () => {
 
   const handleToggleLike = async (id: string) => {
     console.log("❤️ [Dashboard Like] Toggling like for post id:", id);
+
     // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
@@ -106,7 +107,31 @@ const Dashboard: React.FC = () => {
     );
 
     try {
-      await postsAPI.toggleLike(id);
+      const res = await postsAPI.toggleLike(id);
+      if (!res.success && (res.status === 401 || res.error?.includes("token") || res.error?.includes("Authentication"))) {
+        // Revert optimistic update
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === id) {
+              const isLiked = !p.isLiked;
+              return {
+                ...p,
+                isLiked,
+                likes: isLiked ? p.likes + 1 : Math.max(0, p.likes - 1),
+              };
+            }
+            return p;
+          })
+        );
+        Alert.alert(
+          "Session Expired",
+          "Your login session has expired. Please sign in again.",
+          [
+            { text: "Sign In", onPress: handleSignOut },
+            { text: "Cancel", style: "cancel" },
+          ]
+        );
+      }
     } catch {}
   };
 
@@ -133,55 +158,22 @@ const Dashboard: React.FC = () => {
       if (res.success && res.post) {
         setPosts((prev) => [res.post, ...prev]);
         setUserCreatedCount((prev) => prev + 1);
-
         logPostCreation(postData.tag, postData.fromCity, postData.toCity);
+        Alert.alert("Post Published!", "Your journey update is live on the community feed.");
+      } else if (res.status === 401 || res.error?.includes("token") || res.error?.includes("Authentication")) {
+        Alert.alert(
+          "Session Expired",
+          "Your login session has expired or is invalid. Please sign in again to publish posts.",
+          [
+            { text: "Sign In", onPress: handleSignOut },
+            { text: "Cancel", style: "cancel" },
+          ]
+        );
       } else {
-        // Fallback local update if network is unreachable
-        const fallbackPost: PostItem = {
-          id: `p_${Date.now()}`,
-          author: userName,
-          authorTag: `@${userName.toLowerCase().replace(/\s+/g, "_")}`,
-          timeAgo: "Just now",
-          content: postData.content,
-          fromCity: postData.fromCity,
-          toCity: postData.toCity,
-          departureTime: postData.departureTime,
-          availableSeats: postData.availableSeats,
-          pricePerSeat: postData.pricePerSeat,
-          link: postData.link,
-          linkTitle: postData.linkTitle,
-          tag: postData.tag,
-          photos: postData.photos || [],
-          likes: 0,
-          commentsCount: 0,
-          isLiked: false,
-        };
-        setPosts([fallbackPost, ...posts]);
-        setUserCreatedCount((prev) => prev + 1);
+        Alert.alert("Unable to Publish", res.error || "Please check your network and try again.");
       }
-    } catch (err) {
-      // Local fallback
-      const fallbackPost: PostItem = {
-        id: `p_${Date.now()}`,
-        author: userName,
-        authorTag: `@${userName.toLowerCase().replace(/\s+/g, "_")}`,
-        timeAgo: "Just now",
-        content: postData.content,
-        fromCity: postData.fromCity,
-        toCity: postData.toCity,
-        departureTime: postData.departureTime,
-        availableSeats: postData.availableSeats,
-        pricePerSeat: postData.pricePerSeat,
-        link: postData.link,
-        linkTitle: postData.linkTitle,
-        tag: postData.tag,
-        photos: postData.photos || [],
-        likes: 0,
-        commentsCount: 0,
-        isLiked: false,
-      };
-      setPosts([fallbackPost, ...posts]);
-      setUserCreatedCount((prev) => prev + 1);
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to publish post.");
     }
   };
 
