@@ -47,3 +47,4 @@ export default {
   cloudinary,
   uploadToCloudinary,
 };
+

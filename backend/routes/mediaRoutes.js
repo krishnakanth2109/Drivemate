@@ -8,3 +8,4 @@ const router = Router();
 router.post('/upload', requireAuth, uploadMedia);
 
 export default router;
+
