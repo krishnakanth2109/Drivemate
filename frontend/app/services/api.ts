@@ -399,6 +399,7 @@ export const postsAPI = {
     link?: string;
     linkTitle?: string;
     tag?: string;
+    photos?: string[];
   }) {
     return await request("/posts", {
       method: "POST",

@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  Image,
 } from "react-native";
 import {
   PlusIcon,
@@ -58,6 +59,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [driversList, setDriversList] = useState<DriverProfile[]>([]);
+  const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
 
   // Refresh discoverable drivers & connection statuses
   const refreshDrivers = async () => {
@@ -276,6 +278,76 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     <Text style={styles.routePrice}>{post.pricePerSeat}</Text>
                   )}
                 </View>
+              </View>
+            )}
+
+            {/* Attached Photos (Limit of 3) */}
+            {post.photos && post.photos.length > 0 && (
+              <View style={styles.postPhotosContainer}>
+                {post.photos.length === 1 && (
+                  <TouchableOpacity
+                    style={styles.singlePhotoWrapper}
+                    onPress={() => setZoomPhotoUrl(post.photos![0])}
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={{ uri: post.photos[0] }}
+                      style={styles.singlePhoto}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {post.photos.length === 2 && (
+                  <View style={styles.doublePhotosRow}>
+                    {post.photos.slice(0, 2).map((photoUrl, pIdx) => (
+                      <TouchableOpacity
+                        key={pIdx}
+                        style={styles.doublePhotoWrapper}
+                        onPress={() => setZoomPhotoUrl(photoUrl)}
+                        activeOpacity={0.9}
+                      >
+                        <Image
+                          source={{ uri: photoUrl }}
+                          style={styles.doublePhoto}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {post.photos.length >= 3 && (
+                  <View style={styles.triplePhotosContainer}>
+                    <TouchableOpacity
+                      style={styles.triplePhotoTopWrapper}
+                      onPress={() => setZoomPhotoUrl(post.photos![0])}
+                      activeOpacity={0.9}
+                    >
+                      <Image
+                        source={{ uri: post.photos[0] }}
+                        style={styles.triplePhotoTop}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                    <View style={styles.triplePhotosBottomRow}>
+                      {post.photos.slice(1, 3).map((photoUrl, pIdx) => (
+                        <TouchableOpacity
+                          key={pIdx}
+                          style={styles.triplePhotoBottomWrapper}
+                          onPress={() => setZoomPhotoUrl(photoUrl)}
+                          activeOpacity={0.9}
+                        >
+                          <Image
+                            source={{ uri: photoUrl }}
+                            style={styles.triplePhotoBottom}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
@@ -509,6 +581,33 @@ const HomeTab: React.FC<HomeTabProps> = ({
               </ScrollView>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Fullscreen Photo Viewer Modal */}
+      <Modal
+        visible={Boolean(zoomPhotoUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomPhotoUrl(null)}
+      >
+        <View style={styles.zoomBackdrop}>
+          <TouchableOpacity
+            style={styles.zoomCloseBtn}
+            onPress={() => setZoomPhotoUrl(null)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <CloseIcon size={20} color="#ffffff" />
+          </TouchableOpacity>
+          {zoomPhotoUrl && (
+            <View style={styles.zoomImageContainer}>
+              <Image
+                source={{ uri: zoomPhotoUrl }}
+                style={styles.zoomImage}
+                resizeMode="contain"
+              />
+            </View>
+          )}
         </View>
       </Modal>
     </>
@@ -1046,5 +1145,87 @@ const styles = StyleSheet.create({
     color: "#92400e",
     fontSize: 13,
     fontWeight: "700",
+  },
+  postPhotosContainer: {
+    marginVertical: 10,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    backgroundColor: "#f4f4f5",
+  },
+  singlePhotoWrapper: {
+    width: "100%",
+    height: 200,
+  },
+  singlePhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  doublePhotosRow: {
+    flexDirection: "row",
+    gap: 3,
+    height: 160,
+  },
+  doublePhotoWrapper: {
+    flex: 1,
+    height: "100%",
+  },
+  doublePhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  triplePhotosContainer: {
+    width: "100%",
+  },
+  triplePhotoTopWrapper: {
+    width: "100%",
+    height: 160,
+    marginBottom: 3,
+  },
+  triplePhotoTop: {
+    width: "100%",
+    height: "100%",
+  },
+  triplePhotosBottomRow: {
+    flexDirection: "row",
+    gap: 3,
+    height: 110,
+  },
+  triplePhotoBottomWrapper: {
+    flex: 1,
+    height: "100%",
+  },
+  triplePhotoBottom: {
+    width: "100%",
+    height: "100%",
+  },
+  zoomBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  zoomCloseBtn: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 54 : 32,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  zoomImageContainer: {
+    width: "96%",
+    height: "80%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  zoomImage: {
+    width: "100%",
+    height: "100%",
   },
 });

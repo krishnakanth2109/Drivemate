@@ -137,6 +137,7 @@ const Dashboard: React.FC = () => {
     link?: string;
     linkTitle?: string;
     tag?: string;
+    photos?: string[];
   }) => {
     console.log("🚀 [Dashboard Publish Post] Submitting payload:", postData);
     try {
@@ -179,6 +180,7 @@ const Dashboard: React.FC = () => {
           link: postData.link,
           linkTitle: postData.linkTitle,
           tag: postData.tag,
+          photos: postData.photos || [],
           likes: 0,
           commentsCount: 0,
           isLiked: false,
@@ -209,6 +211,7 @@ const Dashboard: React.FC = () => {
         link: postData.link,
         linkTitle: postData.linkTitle,
         tag: postData.tag,
+        photos: postData.photos || [],
         likes: 0,
         commentsCount: 0,
         isLiked: false,

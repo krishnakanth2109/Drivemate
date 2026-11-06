@@ -14,6 +14,7 @@ const postSchema = new mongoose.Schema({
   link: { type: String },
   linkTitle: { type: String },
   tag: { type: String, default: '#General' },
+  photos: { type: [String], default: [] },
   timeAgo: { type: String, default: 'Just now' },
   likes: { type: Number, default: 0 },
   commentsCount: { type: Number, default: 0 },

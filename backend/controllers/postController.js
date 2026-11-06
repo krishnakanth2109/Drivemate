@@ -52,6 +52,7 @@ export const createPost = async (req, res) => {
       link,
       linkTitle,
       tag,
+      photos,
     } = req.body;
 
     if (!content || !content.trim()) {
@@ -117,6 +118,7 @@ export const createPost = async (req, res) => {
       link: link && link.trim() ? link.trim() : undefined,
       linkTitle: linkTitle && linkTitle.trim() ? linkTitle.trim() : undefined,
       tag: tag && tag.trim() ? tag.trim() : '#Carpool',
+      photos: Array.isArray(photos) ? photos.slice(0, 3) : [],
       timeAgo: 'Just now',
       likes: 0,
       commentsCount: 0,

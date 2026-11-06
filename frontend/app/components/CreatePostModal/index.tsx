@@ -10,8 +10,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
-import { CloseIcon, LinkIcon, SparklesIcon, CarIcon } from "../Icons";
+import { CloseIcon, LinkIcon, SparklesIcon, CarIcon, CameraIcon } from "../Icons";
 
 export interface PostItem {
   id: string;
@@ -28,6 +29,7 @@ export interface PostItem {
   link?: string;
   linkTitle?: string;
   tag?: string;
+  photos?: string[];
   likes: number;
   commentsCount: number;
   isLiked?: boolean;
@@ -46,6 +48,7 @@ interface CreatePostModalProps {
     link?: string;
     linkTitle?: string;
     tag?: string;
+    photos?: string[];
   }) => void;
   onOpenPaymentModal: () => void;
   freePostsUsed: number;
@@ -62,6 +65,25 @@ const CATEGORIES = [
   "#TrafficAlert",
   "#Maintenance",
   "#EVCharging",
+];
+
+const PRESET_POST_PHOTOS = [
+  {
+    title: "Rocklin Supercharger",
+    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
+  },
+  {
+    title: "Donner Snow Highway",
+    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1498084393753-b411b2d26b34?w=800",
+  },
+  {
+    title: "Rivian Mountain Run",
+    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800",
+  },
+  {
+    title: "Pacific Coast Highway",
+    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800",
+  },
 ];
 
 const CreatePostModal: React.FC<CreatePostModalProps> = ({
@@ -88,6 +110,35 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [selectedTag, setSelectedTag] = useState("#Carpool");
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Photo Attachment State (Limit 3)
+  const MAX_PHOTOS = 3;
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [customPhotoInput, setCustomPhotoInput] = useState("");
+
+  const handleAddPhoto = (url: string) => {
+    if (!url || !url.trim()) return;
+    const cleanUrl = url.trim();
+
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert("Limit Reached", "You can attach a maximum of 3 photos per post.");
+      return;
+    }
+
+    if (photos.includes(cleanUrl)) {
+      Alert.alert("Already Added", "This photo has already been attached.");
+      return;
+    }
+
+    setPhotos([...photos, cleanUrl]);
+    setCustomPhotoInput("");
+    setShowPhotoPicker(false);
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos(photos.filter((_, i) => i !== index));
+  };
 
   const isLimitReached = !isProUser && singlePasses <= 0 && freePostsUsed >= maxFreePosts;
 
@@ -117,6 +168,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
       link: cleanLink || undefined,
       linkTitle: linkTitle.trim() || undefined,
       tag: selectedTag,
+      photos: photos.slice(0, MAX_PHOTOS),
     });
 
     // Reset fields
@@ -126,7 +178,9 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setDepartureTime("");
     setLink("");
     setLinkTitle("");
+    setPhotos([]);
     setShowLinkInput(false);
+    setShowPhotoPicker(false);
     onClose();
   };
 
@@ -338,6 +392,146 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   />
                 </View>
               )}
+
+              {/* Photos Attachment Section (Limit 3) */}
+              <View style={styles.photoSection}>
+                <View style={styles.photoHeaderRow}>
+                  <View style={styles.photoHeaderLeft}>
+                    <CameraIcon size={16} color="#09090b" />
+                    <Text style={styles.photoSectionTitle}>Vehicle & Trip Photos</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.photoCountBadge,
+                      photos.length >= MAX_PHOTOS && styles.photoCountBadgeFull,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.photoCountText,
+                        photos.length >= MAX_PHOTOS && styles.photoCountTextFull,
+                      ]}
+                    >
+                      {photos.length} / {MAX_PHOTOS} max
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Attached Photo Previews */}
+                {photos.length > 0 && (
+                  <View style={styles.thumbnailsRow}>
+                    {photos.map((photoUrl, idx) => (
+                      <View key={idx} style={styles.thumbnailWrapper}>
+                        <Image
+                          source={{ uri: photoUrl }}
+                          style={styles.thumbnailImage}
+                        />
+                        <View style={styles.thumbnailIndexBadge}>
+                          <Text style={styles.thumbnailIndexText}>{idx + 1}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.thumbnailRemoveBtn}
+                          onPress={() => handleRemovePhoto(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <CloseIcon size={12} color="#ffffff" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Attach Action / Limit Notice */}
+                {photos.length < MAX_PHOTOS ? (
+                  <TouchableOpacity
+                    style={styles.addPhotoToggleBtn}
+                    onPress={() => setShowPhotoPicker(!showPhotoPicker)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.addPhotoToggleText}>
+                      {showPhotoPicker
+                        ? "Hide photo options"
+                        : `+ Attach Photo (${MAX_PHOTOS - photos.length} left)`}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.maxPhotoNotice}>
+                    <Text style={styles.maxPhotoNoticeText}>
+                      ✓ Maximum limit of 3 photos reached
+                    </Text>
+                  </View>
+                )}
+
+                {/* Photo Picker Drawer */}
+                {showPhotoPicker && photos.length < MAX_PHOTOS && (
+                  <View style={styles.photoPickerBox}>
+                    <Text style={styles.pickerSubheading}>
+                      Choose from travel presets or paste an image URL:
+                    </Text>
+
+                    {/* Presets Horizontal Scroll */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.presetsScroll}
+                    >
+                      {PRESET_POST_PHOTOS.map((preset, idx) => {
+                        const isAdded = photos.includes(preset.url);
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            style={[
+                              styles.presetCard,
+                              isAdded && styles.presetCardDisabled,
+                            ]}
+                            onPress={() => handleAddPhoto(preset.url)}
+                            disabled={isAdded}
+                            activeOpacity={0.75}
+                          >
+                            <Image
+                              source={{ uri: preset.url }}
+                              style={styles.presetImage}
+                            />
+                            <View style={styles.presetTitleOverlay}>
+                              <Text
+                                style={styles.presetTitleText}
+                                numberOfLines={1}
+                              >
+                                {isAdded ? "✓ Added" : preset.title}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    {/* Custom URL Input */}
+                    <View style={styles.customPhotoRow}>
+                      <TextInput
+                        style={styles.customPhotoInput}
+                        placeholder="https://... image URL"
+                        placeholderTextColor="#a1a1aa"
+                        value={customPhotoInput}
+                        onChangeText={setCustomPhotoInput}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.customPhotoAddBtn,
+                          !customPhotoInput.trim() && styles.customPhotoAddBtnDisabled,
+                        ]}
+                        onPress={() => handleAddPhoto(customPhotoInput)}
+                        disabled={!customPhotoInput.trim()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.customPhotoAddBtnText}>Add</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
             </ScrollView>
 
             {/* Submit Action */}
@@ -624,5 +818,206 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  photoSection: {
+    marginTop: 6,
+    marginBottom: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f4f4f5",
+  },
+  photoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  photoHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  photoSectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  photoCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: "#f4f4f5",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  photoCountBadgeFull: {
+    backgroundColor: "#fef3c7",
+    borderColor: "#fde68a",
+  },
+  photoCountText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#71717a",
+  },
+  photoCountTextFull: {
+    color: "#b45309",
+    fontWeight: "700",
+  },
+  thumbnailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  thumbnailWrapper: {
+    position: "relative",
+    width: 76,
+    height: 76,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  thumbnailImage: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbnailIndexBadge: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbnailIndexText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  thumbnailRemoveBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addPhotoToggleBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#f4f4f5",
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  addPhotoToggleText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#09090b",
+  },
+  maxPhotoNotice: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  maxPhotoNoticeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#166534",
+  },
+  photoPickerBox: {
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  pickerSubheading: {
+    fontSize: 11,
+    color: "#71717a",
+    marginBottom: 8,
+  },
+  presetsScroll: {
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: 8,
+  },
+  presetCard: {
+    width: 105,
+    height: 70,
+    borderRadius: 8,
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  presetCardDisabled: {
+    opacity: 0.45,
+  },
+  presetImage: {
+    width: "100%",
+    height: "100%",
+  },
+  presetTitleOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  presetTitleText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  customPhotoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  customPhotoInput: {
+    flex: 1,
+    height: 36,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 10,
+    fontSize: 11,
+    color: "#09090b",
+  },
+  customPhotoAddBtn: {
+    height: 36,
+    paddingHorizontal: 14,
+    backgroundColor: "#09090b",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customPhotoAddBtnDisabled: {
+    backgroundColor: "#a1a1aa",
+  },
+  customPhotoAddBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });
