@@ -5,6 +5,7 @@ const postSchema = new mongoose.Schema({
   userId: { type: String, index: true },
   author: { type: String, required: true },
   authorTag: { type: String, default: '@driver' },
+  authorAvatar: { type: String, default: '' },
   content: { type: String, required: true },
   fromCity: { type: String, default: '' },
   toCity: { type: String, default: '' },

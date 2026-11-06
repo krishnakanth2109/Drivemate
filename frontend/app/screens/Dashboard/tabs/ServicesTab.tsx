@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,14 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { WrenchIcon, SparklesIcon, CheckCircleIcon } from "../../../components/Icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  WrenchIcon,
+  SparklesIcon,
+  CheckCircleIcon,
+  PlayIcon,
+} from "../../../components/Icons";
+import BallGame from "../../../components/BallGame";
 
 interface ServiceItem {
   id: string;
@@ -65,18 +72,48 @@ const SERVICES_DATA: ServiceItem[] = [
   },
   {
     id: "5",
-    title: "Trip Expense & Fuel Log",
-    category: "Finance",
+    title: "Trip Mileage & Route Log",
+    category: "Navigation",
     description:
-      "Automatic mileage tracking, tax deduction reports, and multi-currency fuel receipts management.",
+      "Automatic mileage tracking, journey waypoint history, and vehicle commute logs.",
     status: "Available",
     photoUrl:
       "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224154-26032ffc0d07",
   },
+  {
+    id: "game_arcade",
+    title: "Rising Ball Arcade",
+    category: "Mini Game",
+    description:
+      "Play while waiting or charging: Tap to hop the ball to the top green target, navigate moving obstacle bars, and avoid getting OUT!",
+    badge: "PLAYABLE",
+    status: "Active",
+    photoUrl:
+      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1511512578047-dfb367046420",
+  },
 ];
 
 const ServicesTab: React.FC = () => {
+  const [isGameOpen, setIsGameOpen] = useState(false);
+  const [highScore, setHighScore] = useState(0);
+
+  useEffect(() => {
+    async function loadScore() {
+      try {
+        const val = await AsyncStorage.getItem("@drivemate_ball_game_high_score");
+        if (val) setHighScore(parseInt(val, 10) || 0);
+      } catch {}
+    }
+    if (!isGameOpen) {
+      loadScore();
+    }
+  }, [isGameOpen]);
+
   const handleServicePress = (service: ServiceItem) => {
+    if (service.id === "game_arcade") {
+      setIsGameOpen(true);
+      return;
+    }
     Alert.alert(
       service.title,
       `${service.description}\n\nCategory: ${service.category}\nStatus: ${service.status}`
@@ -93,6 +130,44 @@ const ServicesTab: React.FC = () => {
         <Text style={styles.headerSub}>
           Vehicle tools, emergency rescue, and digital auto utilities
         </Text>
+      </View>
+
+      {/* Featured Mini Game Banner */}
+      <View style={styles.gameCard}>
+        <View style={styles.gameCardTop}>
+          <View style={styles.gameBadge}>
+            <SparklesIcon size={12} color="#ffffff" />
+            <Text style={styles.gameBadgeText}>NEW MINI GAME</Text>
+          </View>
+          <View style={styles.gameScoreBadge}>
+            <Text style={styles.gameScoreBadgeText}>🏆 BEST: {highScore}</Text>
+          </View>
+        </View>
+
+        <View style={styles.gameContent}>
+          <View style={styles.gameVisualWrap}>
+            <View style={styles.gameVisualTopGoal} />
+            <View style={styles.gameVisualObstacle1} />
+            <View style={styles.gameVisualObstacle2} />
+            <View style={styles.gameVisualBall} />
+          </View>
+
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameTitle}>Rising Ball Challenge</Text>
+            <Text style={styles.gameDesc}>
+              Tap to hop the ball to the top green zone! Score points, dodge obstacle bars, and don't get OUT!
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.playGameBtn}
+          onPress={() => setIsGameOpen(true)}
+          activeOpacity={0.85}
+        >
+          <PlayIcon size={16} color="#ffffff" />
+          <Text style={styles.playGameBtnText}>PLAY GAME NOW</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Emergency Assistance Banner */}
@@ -166,6 +241,12 @@ const ServicesTab: React.FC = () => {
           </View>
         </TouchableOpacity>
       ))}
+
+      {/* Interactive Arcade Ball Game Modal */}
+      <BallGame
+        visible={isGameOpen}
+        onClose={() => setIsGameOpen(false)}
+      />
     </ScrollView>
   );
 };
@@ -190,6 +271,127 @@ const styles = StyleSheet.create({
   headerSub: {
     fontSize: 13,
     color: "#71717a",
+  },
+  gameCard: {
+    backgroundColor: "#18181b",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: "#27272a",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  gameCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  gameBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#10b981",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  gameBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  gameScoreBadge: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  gameScoreBadgeText: {
+    color: "#f59e0b",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  gameContent: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  gameVisualWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 14,
+    backgroundColor: "#27272a",
+    borderWidth: 1,
+    borderColor: "#3f3f46",
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  gameVisualTopGoal: {
+    width: 44,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10b981",
+  },
+  gameVisualObstacle1: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#f59e0b",
+  },
+  gameVisualObstacle2: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ef4444",
+  },
+  gameVisualBall: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#38bdf8",
+    borderWidth: 1.5,
+    borderColor: "#ffffff",
+  },
+  gameInfo: {
+    flex: 1,
+  },
+  gameTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 3,
+    letterSpacing: -0.2,
+  },
+  gameDesc: {
+    color: "#a1a1aa",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  playGameBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#ffffff",
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  playGameBtnText: {
+    color: "#09090b",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   emergencyBanner: {
     flexDirection: "row",

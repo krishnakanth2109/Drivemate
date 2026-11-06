@@ -12,6 +12,8 @@ export interface StoredUserProfile {
   email: string;
   phoneNumber?: string;
   username?: string;
+  profilePicture?: string;
+  photoUrl?: string;
   bio?: string;
   location?: string;
   drivingStyle?: string;
@@ -76,6 +78,8 @@ export async function saveUserProfile(profile: StoredUserProfile): Promise<void>
     console.error("❌ [Storage] Failed to save user profile:", error);
   }
 }
+
+export const setUserProfile = saveUserProfile;
 
 /**
  * Retrieve user profile from AsyncStorage

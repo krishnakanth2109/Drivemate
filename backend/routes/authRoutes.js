@@ -9,6 +9,7 @@ import {
   getProfile,
   updateProfile,
   logout,
+  deleteAccount,
 } from '../controllers/authController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
@@ -23,6 +24,8 @@ router.get('/verify', requireAuth, verifyToken);
 router.get('/profile', requireAuth, getProfile);
 router.put('/profile', requireAuth, updateProfile);
 router.post('/logout', requireAuth, logout);
+router.delete('/account', requireAuth, deleteAccount);
+router.delete('/delete-account', requireAuth, deleteAccount);
 
 export default router;
 

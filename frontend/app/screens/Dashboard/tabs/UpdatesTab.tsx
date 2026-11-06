@@ -14,10 +14,10 @@ const UPDATES_DATA: UpdateItem[] = [
   {
     id: "1",
     category: "Feature",
-    title: "Drivemate Pro Posting & Payments Live",
+    title: "Community Carpooling & Route Sharing Live",
     date: "Just Now",
     summary:
-      "All members receive 2 free community posts with instant Pro subscription unlocks for high-frequency posters and clubs.",
+      "All members can now connect with verified drivers, coordinate carpools, and share real-time road conditions.",
     photoUrl:
       "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224155-8d04cb21cd6c",
   },

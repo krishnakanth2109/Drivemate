@@ -22,24 +22,68 @@ export const requireAuth = async (req, res, next) => {
       });
     }
 
-    // 1. Check backend async storage token session
+    // 1. Check backend async storage token session (includes MongoDB Atlas persistent lookup)
     const session = await asyncStorage.validateTokenSession(token);
     let uid = session ? session.uid : null;
 
-    // 2. If not found in local async storage session, verify with Firebase Admin SDK verifyIdToken
+    // 2. If not found, verify standard Firebase ID token with Admin SDK if available
     if (!uid && auth) {
       try {
         const decodedToken = await auth.verifyIdToken(token);
         uid = decodedToken.uid;
-        // Cache verified token in asyncStorage
+        // Cache verified token in asyncStorage & MongoDB
         await asyncStorage.storeToken(token, {
           uid,
           email: decodedToken.email,
           authTime: decodedToken.auth_time,
         });
       } catch (fbErr) {
-        // If it's a custom token or format mismatch, check session again
-        console.warn(`[AuthMiddleware] verifyIdToken check: ${fbErr.message}`);
+        // If it's a custom token or format mismatch, continue to JWT/dm_ parser
+      }
+    }
+
+    // 3. If token is a JWT (such as a Firebase Custom Token or service-issued token)
+    if (!uid && typeof token === 'string' && token.includes('.')) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          const candidateUid = payload.uid || payload.user_id || payload.sub;
+          if (candidateUid) {
+            const { User } = await import('../models/User.js');
+            const existing = await User.findOne({ uid: candidateUid }).lean();
+            if (existing) {
+              uid = existing.uid;
+              await User.updateOne({ uid }, { $set: { activeToken: token } }).catch(() => {});
+              await asyncStorage.storeToken(token, { uid, email: existing.email }).catch(() => {});
+            } else if (auth) {
+              try {
+                const fbUser = await auth.getUser(candidateUid);
+                if (fbUser) {
+                  uid = fbUser.uid;
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch (jwtErr) {}
+    }
+
+    // 4. If token is a dm_<uid>_<random> fallback token
+    if (!uid && typeof token === 'string' && token.startsWith('dm_')) {
+      const firstUnderscore = token.indexOf('_');
+      const lastUnderscore = token.lastIndexOf('_');
+      if (firstUnderscore !== -1 && lastUnderscore > firstUnderscore) {
+        const candidateUid = token.substring(firstUnderscore + 1, lastUnderscore);
+        if (candidateUid) {
+          const { User } = await import('../models/User.js');
+          const existing = await User.findOne({ uid: candidateUid }).lean();
+          if (existing) {
+            uid = existing.uid;
+            await User.updateOne({ uid }, { $set: { activeToken: token } }).catch(() => {});
+            await asyncStorage.storeToken(token, { uid, email: existing.email }).catch(() => {});
+          }
+        }
       }
     }
 
@@ -52,6 +96,12 @@ export const requireAuth = async (req, res, next) => {
 
     // Fetch user profile
     let user = await dataStore.getUserById(uid);
+    if (!user) {
+      try {
+        const { User } = await import('../models/User.js');
+        user = await User.findOne({ uid }).lean();
+      } catch {}
+    }
     if (!user) {
       // If user is authenticated in Firebase Auth but missing local record, pull from Firebase Auth
       try {

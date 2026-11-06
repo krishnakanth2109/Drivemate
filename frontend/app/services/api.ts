@@ -371,6 +371,23 @@ export const authAPI = {
     await clearAuthSession();
     return { success: true };
   },
+
+  /**
+   * Permanently delete account and clear all local data
+   */
+  async deleteAccount() {
+    try {
+      const res = await request<{ message?: string }>("/auth/account", {
+        method: "DELETE",
+        requiresAuth: true,
+      });
+      await clearAuthSession();
+      return res;
+    } catch (err: any) {
+      await clearAuthSession();
+      return { success: false, error: err?.message || "Failed to delete account" };
+    }
+  },
 };
 
 // ================= POSTS API =================
@@ -504,6 +521,8 @@ export interface DriverProfile {
   location: string;
   drivingStyle: string;
   vehicleName: string;
+  profilePicture?: string;
+  photoUrl?: string;
   connectionStatus?: "none" | "pending" | "accepted" | "declined";
   connectionRequestId?: string;
   isSender?: boolean;
@@ -532,6 +551,7 @@ export interface ConversationItem {
   lastMessage: string;
   lastTime: string;
   unreadCount: number;
+  avatar?: string;
 }
 
 export const messagesAPI = {

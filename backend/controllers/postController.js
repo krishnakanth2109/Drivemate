@@ -62,52 +62,14 @@ export const createPost = async (req, res) => {
       });
     }
 
-    // Fresh user state from database to ensure atomic quota check
-    const freshUser = await dataStore.getUserById(user.uid) || user;
-    const maxFree = typeof freshUser.maxFreePosts === 'number' ? freshUser.maxFreePosts : 2;
-    const usedFree = typeof freshUser.freePostsUsed === 'number' ? freshUser.freePostsUsed : 0;
-    const singlePasses = typeof freshUser.singlePasses === 'number' ? freshUser.singlePasses : 0;
-    const isPro = !!freshUser.isProUser;
-
-    // Strict 2 free posts barrier
-    const canPost = isPro || singlePasses > 0 || usedFree < maxFree;
-
-    if (!canPost) {
-      return res.status(402).json({
-        success: false,
-        requirePayment: true,
-        error: 'Free tier limit reached (2/2 posts used). Please upgrade to Pro or purchase a single post pass.',
-        quota: {
-          freePostsUsed: usedFree,
-          maxFreePosts: maxFree,
-          singlePasses,
-          isProUser: isPro,
-        },
-      });
-    }
-
-    // Deduct pass or increment free posts count atomically
-    let updatedFreeUsed = usedFree;
-    let updatedSinglePasses = singlePasses;
-
-    if (!isPro) {
-      if (usedFree < maxFree) {
-        updatedFreeUsed = usedFree + 1;
-      } else if (singlePasses > 0) {
-        updatedSinglePasses = singlePasses - 1;
-      }
-    }
-
-    // Update user in database
-    const updatedUser = await dataStore.updateUser(user.uid, {
-      freePostsUsed: updatedFreeUsed,
-      singlePasses: updatedSinglePasses,
-    });
+    // Fresh user state from database
+    const freshUser = (await dataStore.getUserById(user.uid)) || user;
 
     // Create the post with ride-sharing / journey details
     const postPayload = {
       author: freshUser.fullName || 'Drivemate Driver',
       authorTag: freshUser.username ? `@${freshUser.username}` : '@driver',
+      authorAvatar: req.body.authorAvatar || freshUser.profilePicture || freshUser.photoUrl || '',
       userId: freshUser.uid,
       content: content.trim(),
       fromCity: fromCity ? fromCity.trim() : undefined,

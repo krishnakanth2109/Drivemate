@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { auth } from '../config/firebase.js';
 import { asyncStorage } from '../utils/asyncStorage.js';
 import { dataStore } from '../utils/database.js';
+import emailService from '../services/emailService.js';
 
 function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
@@ -31,6 +32,14 @@ export const sendOtp = async (req, res) => {
     }
 
     console.log(`📲 [OTP Dispatch] Generated 6-digit OTP "${generatedOtp}" for ${key} (Expires in 10m)`);
+
+    // Dispatch verification OTP via email if email provided
+    if (email && email.includes('@')) {
+      emailService.sendVerificationOtpEmail({
+        toEmail: email.trim().toLowerCase(),
+        otpCode: generatedOtp,
+      }).catch((err) => console.warn('OTP email dispatch warning:', err.message));
+    }
 
     return res.status(200).json({
       success: true,
@@ -524,7 +533,7 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { fullName, username, phoneNumber, bio, location, drivingStyle } = req.body;
+    const { fullName, username, phoneNumber, bio, location, drivingStyle, profilePicture, photoUrl } = req.body;
     const updates = {};
     if (fullName !== undefined) updates.fullName = fullName;
     if (username !== undefined) updates.username = username;
@@ -532,13 +541,21 @@ export const updateProfile = async (req, res) => {
     if (bio !== undefined) updates.bio = bio;
     if (location !== undefined) updates.location = location;
     if (drivingStyle !== undefined) updates.drivingStyle = drivingStyle;
+    if (profilePicture !== undefined) updates.profilePicture = profilePicture;
+    if (photoUrl !== undefined) {
+      updates.photoUrl = photoUrl;
+      if (!updates.profilePicture) updates.profilePicture = photoUrl;
+    }
 
     const updatedUser = await dataStore.updateUser(req.user.uid, updates);
 
-    // Update Firebase Auth displayName if available
-    if (auth && fullName) {
+    // Update Firebase Auth displayName and photoURL if available
+    if (auth && (fullName || profilePicture || photoUrl)) {
       try {
-        await auth.updateUser(req.user.uid, { displayName: fullName });
+        const fbUpdates = {};
+        if (fullName) fbUpdates.displayName = fullName;
+        if (profilePicture || photoUrl) fbUpdates.photoURL = profilePicture || photoUrl;
+        await auth.updateUser(req.user.uid, fbUpdates);
       } catch (err) {}
     }
 
@@ -566,5 +583,26 @@ export const logout = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Logout failed.' });
+  }
+};
+
+export const deleteAccount = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    await dataStore.deleteUser(uid);
+    if (req.token) {
+      await asyncStorage.revokeToken(req.token);
+    }
+    console.log(`🗑️ [Delete Account] User ${uid} permanently deleted.`);
+    return res.status(200).json({
+      success: true,
+      message: 'Account permanently deleted.',
+    });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete account.',
+    });
   }
 };

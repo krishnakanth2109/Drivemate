@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -26,33 +27,25 @@ import {
   UserIcon,
   PlusIcon,
 } from "../../../components/Icons";
-import { authAPI, vehiclesAPI, postsAPI, billingAPI } from "../../../services/api";
+import { authAPI, vehiclesAPI, postsAPI } from "../../../services/api";
 import { getUserProfile, StoredUserProfile } from "../../../services/storage";
 
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface ProfileTabProps {
-  onOpenPaymentModal: () => void;
   onSignOut: () => void;
-  freePostsUsed: number;
-  maxFreePosts: number;
-  isProUser: boolean;
-  singlePasses?: number;
   totalPostsCreated: number;
   userName?: string;
   userEmail?: string;
+  userAvatar?: string;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
-  onOpenPaymentModal,
   onSignOut,
-  freePostsUsed: fallbackFreeUsed,
-  maxFreePosts: fallbackMaxFree,
-  isProUser: fallbackIsPro,
-  singlePasses: fallbackSinglePasses = 0,
   totalPostsCreated: fallbackPostsCount,
   userName: fallbackName = "Driver",
   userEmail: fallbackEmail = "",
+  userAvatar,
 }) => {
   const navigation = useNavigation<ProfileNavProp>();
 
@@ -111,13 +104,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
   // Derive active values prioritizing fresh backend data
   const displayName = profile?.fullName || fallbackName || "Drivemate Driver";
-  const displayEmail = profile?.email || fallbackEmail || "driver@drivemate.com";
+  const displayEmail = profile?.email || fallbackEmail || "";
   const displayUsername = profile?.username ? `@${profile.username}` : "@driver";
-  const isPro = typeof profile?.isProUser === "boolean" ? profile.isProUser : fallbackIsPro;
-  const freeUsed = typeof profile?.freePostsUsed === "number" ? profile.freePostsUsed : fallbackFreeUsed;
-  const maxFree = typeof profile?.maxFreePosts === "number" ? profile.maxFreePosts : fallbackMaxFree;
-  const passes = typeof profile?.singlePasses === "number" ? profile.singlePasses : fallbackSinglePasses;
-  const freeRemaining = Math.max(0, maxFree - freeUsed);
+  const avatarUrl = profile?.profilePicture || profile?.photoUrl || userAvatar;
 
   // Primary vehicle
   const primaryVehicle = vehicles.find((v) => v.isPrimary) || vehicles[0] || null;
@@ -133,11 +122,19 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarWrapper}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={styles.avatar}
+            onPress={() => navigation.navigate("EditProfile")}
+            activeOpacity={0.8}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.editBadge}
             onPress={() => navigation.navigate("EditProfile")}
@@ -153,9 +150,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
         <View style={styles.planBadge}>
           <SparklesIcon size={12} color="#09090b" />
-          <Text style={styles.planBadgeText}>
-            {isPro ? "PRO MEMBER" : "FREE TIER PLAN"}
-          </Text>
+          <Text style={styles.planBadgeText}>COMMUNITY MEMBER</Text>
         </View>
 
         {/* Live Backend Stats Row */}
@@ -188,48 +183,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             <Text style={styles.statLabel}>Likes</Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Posting Allowance Card */}
-      <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Posting Allowance</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Billing")}>
-            <Text style={styles.sectionActionText}>
-              {isPro ? "Billing" : "Upgrade"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.planNotice}>
-          {isPro
-            ? "You are on Drivemate Pro with unlimited community posts and verified priority."
-            : passes > 0
-            ? `Free tier includes ${maxFree} posts (${freeUsed}/${maxFree} used). You have ${passes} paid post pass active.`
-            : `Free tier includes ${maxFree} posts. You have used ${freeUsed} of ${maxFree} free posts.`}
-        </Text>
-
-        {!isPro && (
-          <View style={styles.progressContainer}>
-            <View
-              style={[
-                styles.progressBar,
-                { width: `${Math.min(100, (freeUsed / Math.max(1, maxFree)) * 100)}%` },
-              ]}
-            />
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={styles.upgradeBtn}
-          onPress={onOpenPaymentModal}
-          activeOpacity={0.8}
-        >
-          <CreditCardIcon size={16} color="#ffffff" />
-          <Text style={styles.upgradeBtnText}>
-            {isPro ? "Manage Subscription" : "Upgrade to Pro ($9.99/mo)"}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Primary Vehicle Quick Card (Fetched from Backend Garage) */}
@@ -317,26 +270,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               {vehicles.length === 0
                 ? "No registered vehicles yet"
                 : `${vehicles.length} vehicle${vehicles.length === 1 ? "" : "s"} registered in garage`}
-            </Text>
-          </View>
-          <ChevronRightIcon size={18} color="#a1a1aa" />
-        </TouchableOpacity>
-
-        <View style={styles.menuDivider} />
-
-        {/* Membership & Billing */}
-        <TouchableOpacity
-          style={styles.menuRow}
-          onPress={() => navigation.navigate("Billing")}
-          activeOpacity={0.7}
-        >
-          <View style={styles.menuIconBox}>
-            <CreditCardIcon size={18} color="#09090b" />
-          </View>
-          <View style={styles.menuInfo}>
-            <Text style={styles.menuTitle}>Membership & Billing</Text>
-            <Text style={styles.menuSub}>
-              {isPro ? "Pro Member Active" : `${passes} single pass${passes === 1 ? "" : "es"} available`}
             </Text>
           </View>
           <ChevronRightIcon size={18} color="#a1a1aa" />
@@ -459,6 +392,11 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 26,
     fontWeight: "800",
+  },
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
   },
   editBadge: {
     position: "absolute",

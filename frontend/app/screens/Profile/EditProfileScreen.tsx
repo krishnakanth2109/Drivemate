@@ -9,21 +9,26 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
 import { ArrowLeftIcon, CameraIcon, CheckCircleIcon } from "../../components/Icons";
-import { authAPI } from "../../services/api";
-import { getUserProfile } from "../../services/storage";
+import { authAPI, mediaAPI } from "../../services/api";
+import { getUserProfile, setUserProfile } from "../../services/storage";
 
 const EditProfileScreen: React.FC = () => {
   const navigation = useNavigation();
-  const [fullName, setFullName] = useState("Alex Morgan");
-  const [username, setUsername] = useState("alex_m");
-  const [email, setEmail] = useState("alex@drivemate.com");
-  const [phone, setPhone] = useState("+1 (555) 382-9014");
-  const [bio, setBio] = useState("Automotive enthusiast, EV road-tripper, and weekend track-day driver.");
-  const [location, setLocation] = useState("San Francisco, CA");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bio, setBio] = useState("");
+  const [location, setLocation] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -36,10 +41,105 @@ const EditProfileScreen: React.FC = () => {
         if (stored.phoneNumber) setPhone(stored.phoneNumber);
         if (stored.bio) setBio(stored.bio);
         if (stored.location) setLocation(stored.location);
+        if (stored.profilePicture) setProfilePicture(stored.profilePicture);
+        else if (stored.photoUrl) setProfilePicture(stored.photoUrl);
       }
+
+      try {
+        const res = await authAPI.getProfile();
+        if (res.success && res.user) {
+          if (res.user.fullName) setFullName(res.user.fullName);
+          if (res.user.username) setUsername(res.user.username);
+          if (res.user.email) setEmail(res.user.email);
+          if (res.user.phoneNumber) setPhone(res.user.phoneNumber);
+          if (res.user.bio) setBio(res.user.bio);
+          if (res.user.location) setLocation(res.user.location);
+          if (res.user.profilePicture) setProfilePicture(res.user.profilePicture);
+          else if (res.user.photoUrl) setProfilePicture(res.user.photoUrl);
+        }
+      } catch {}
     }
     loadUser();
   }, []);
+
+  const handlePickAndUploadAvatar = async (useCamera = false) => {
+    try {
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Required", "Camera permission is required to capture a profile picture.");
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Required", "Photo gallery permission is required to choose a profile picture.");
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+            base64: true,
+          });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploadingPhoto(true);
+
+      const fileData = asset.base64
+        ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+        : asset.uri;
+
+      const uploadRes = await mediaAPI.uploadMedia({
+        fileData,
+        fileType: "photo",
+        fileName: `avatar_${Date.now()}.jpg`,
+      });
+
+      const finalUrl = uploadRes?.mediaUrl || asset.uri;
+      setProfilePicture(finalUrl);
+
+      // Save to backend and local storage immediately
+      await authAPI.updateProfile({ profilePicture: finalUrl });
+      const currentStored = await getUserProfile();
+      if (currentStored) {
+        await setUserProfile({ ...currentStored, profilePicture: finalUrl, photoUrl: finalUrl });
+      }
+
+      Alert.alert("Profile Photo Updated", "Your new profile picture has been saved successfully!");
+    } catch (err: any) {
+      Alert.alert("Upload Failed", err.message || "Failed to upload profile picture. Please try again.");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handlePromptAvatarOptions = () => {
+    Alert.alert(
+      "Update Profile Photo",
+      "Choose an option to update your photo:",
+      [
+        { text: "Take Photo (Camera)", onPress: () => handlePickAndUploadAvatar(true) },
+        { text: "Choose from Gallery", onPress: () => handlePickAndUploadAvatar(false) },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
 
   const handleSave = async () => {
     if (!fullName.trim() || !email.trim()) {
@@ -55,7 +155,20 @@ const EditProfileScreen: React.FC = () => {
         phoneNumber: phone.trim(),
         bio: bio.trim(),
         location: location.trim(),
+        profilePicture: profilePicture || undefined,
       });
+      const currentStored = await getUserProfile();
+      if (currentStored) {
+        await setUserProfile({
+          ...currentStored,
+          fullName: fullName.trim(),
+          username: username.trim(),
+          phoneNumber: phone.trim(),
+          bio: bio.trim(),
+          location: location.trim(),
+          profilePicture: profilePicture || currentStored.profilePicture,
+        });
+      }
       setIsSaved(false);
       Alert.alert("Profile Updated", "Your profile changes have been saved successfully.");
       navigation.goBack();
@@ -99,25 +212,25 @@ const EditProfileScreen: React.FC = () => {
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarWrapper}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {fullName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+              <TouchableOpacity
+                style={styles.avatar}
+                activeOpacity={0.8}
+                onPress={handlePromptAvatarOptions}
+              >
+                {isUploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : profilePicture ? (
+                  <Image source={{ uri: profilePicture }} style={styles.avatarImg} />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {fullName ? fullName.charAt(0).toUpperCase() : "U"}
+                  </Text>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cameraBadge}
                 activeOpacity={0.8}
-                onPress={() =>
-                  Alert.alert(
-                    "Profile Photo",
-                    "Choose an option to update your photo",
-                    [
-                      { text: "Camera", onPress: () => {} },
-                      { text: "Choose from Library", onPress: () => {} },
-                      { text: "Cancel", style: "cancel" },
-                    ]
-                  )
-                }
+                onPress={handlePromptAvatarOptions}
               >
                 <CameraIcon size={14} color="#ffffff" />
               </TouchableOpacity>
@@ -297,6 +410,11 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 32,
     fontWeight: "800",
+  },
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 26,
   },
   cameraBadge: {
     position: "absolute",

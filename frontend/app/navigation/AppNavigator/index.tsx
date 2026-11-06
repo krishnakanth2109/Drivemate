@@ -6,7 +6,6 @@ import RegisterScreen from "../../screens/RegisterScreen";
 import Dashboard from "../../screens/Dashboard";
 import EditProfileScreen from "../../screens/Profile/EditProfileScreen";
 import MyVehiclesScreen from "../../screens/Profile/MyVehiclesScreen";
-import BillingScreen from "../../screens/Profile/BillingScreen";
 import MyPostsScreen from "../../screens/Profile/MyPostsScreen";
 import SettingsScreen from "../../screens/Profile/SettingsScreen";
 import HelpCenterScreen from "../../screens/Profile/HelpCenterScreen";
@@ -18,7 +17,6 @@ export type RootStackParamList = {
   Dashboard: undefined;
   EditProfile: undefined;
   MyVehicles: undefined;
-  Billing: undefined;
   MyPosts: undefined;
   Settings: undefined;
   HelpCenter: undefined;
@@ -66,7 +64,6 @@ const AppNavigator: React.FC = () => {
       <Stack.Screen name="Dashboard" component={Dashboard} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="MyVehicles" component={MyVehiclesScreen} />
-      <Stack.Screen name="Billing" component={BillingScreen} />
       <Stack.Screen name="MyPosts" component={MyPostsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />

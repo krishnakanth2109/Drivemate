@@ -29,15 +29,15 @@ interface FAQ {
 const FAQS: FAQ[] = [
   {
     id: "f1",
-    question: "How does the 2-free-posts allowance work?",
+    question: "How does Drivemate community posting work?",
     answer:
-      "All new Drivemate members receive 2 complimentary posts to share updates, route tips, and links with the community. Once those 2 free posts are used, additional posts require either a 1 Single Post Pass ($1.99) or a Drivemate Pro subscription ($9.99/mo) for unlimited publishing.",
+      "All Drivemate members can publish journey updates, route notices, and carpool coordinates with the community. You can attach photos, route links, and carpool details directly to your post.",
   },
   {
     id: "f2",
     question: "How do I link my vehicle's real-time telematics?",
     answer:
-      "Navigate to My Garage in your Profile, tap Add New Vehicle, and input your vehicle's 17-character VIN. Drivemate connects to your vehicle's cloud diagnostics API to sync tire pressure, battery charge, and service schedules.",
+      "Navigate to My Garage in your Profile, tap Add New Vehicle, and input your vehicle details. Drivemate tracks maintenance schedules, odometer milestones, and garage records.",
   },
   {
     id: "f3",
@@ -47,9 +47,9 @@ const FAQS: FAQ[] = [
   },
   {
     id: "f4",
-    question: "Can I cancel my Pro subscription anytime?",
+    question: "How do direct messaging and ride requests work?",
     answer:
-      "Yes. You can manage or cancel your Pro subscription anytime directly from Membership & Billing with zero cancellation fees or lock-ins.",
+      "You can send connection requests to drivers from their post profiles. Once connected, you can chat live, share location waypoints, send voice notes, and transfer verified travel documents.",
   },
 ];
 

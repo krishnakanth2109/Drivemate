@@ -1,6 +1,7 @@
 import { Message } from '../models/Message.js';
 import { Connection } from '../models/Connection.js';
 import { User } from '../models/User.js';
+import emailService from '../services/emailService.js';
 
 const INITIAL_MESSAGES = [
   {
@@ -9,130 +10,10 @@ const INITIAL_MESSAGES = [
     senderName: "Drivemate Dispatch",
     senderTag: "@dispatch_hq",
     roomId: "drivemate-hq",
-    text: "Welcome to Drivemate Driver Comms! Share live road conditions, speed traps, and carpool coordinates here.",
+    text: "Welcome to Drivemate Driver Comms! Share live road updates, locations, and travel tips with fellow drivers.",
     msgType: "text",
     time: "10:00 AM",
     status: "delivered",
-  },
-  {
-    id: "m2",
-    senderId: "marcus_ev",
-    senderName: "Marcus Vance",
-    senderTag: "@marcus_v",
-    roomId: "drivemate-hq",
-    text: "Hey drivers, anyone heading out toward Tahoe today? Donner Pass has light flurries, tire chains recommended.",
-    msgType: "text",
-    time: "10:15 AM",
-    status: "read",
-  },
-  {
-    id: "m3",
-    senderId: "driver_elena",
-    senderName: "Elena Rostova",
-    senderTag: "@elena_m3",
-    roomId: "drivemate-hq",
-    text: "Just pulled into Rocklin Supercharger. Plenty of open 250kW stalls right now!",
-    msgType: "photo",
-    mediaUrl: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
-    time: "10:22 AM",
-    status: "read",
-  },
-  {
-    id: "m4",
-    senderId: "driver_devon",
-    senderName: "Devon Clark",
-    senderTag: "@devon_c",
-    roomId: "drivemate-hq",
-    text: "Carpool meeting spot at Austin Tech Ridge Transit Center.",
-    msgType: "location",
-    locationData: {
-      latitude: 30.3957,
-      longitude: -97.6834,
-      address: "Austin Tech Ridge Park & Ride, Austin, TX",
-    },
-    time: "10:30 AM",
-    status: "read",
-  },
-  {
-    id: "m5",
-    senderId: "driver_marcus",
-    senderName: "Marcus Vance",
-    senderTag: "@marcus_v",
-    roomId: "drivemate-hq",
-    text: "Voice report: Traffic moving smoothly past Truckee exit.",
-    msgType: "voice",
-    fileMeta: {
-      fileName: "Truckee_Road_Report.m4a",
-      duration: "0:14",
-      fileSize: "112 KB",
-      mimeType: "audio/mp4",
-    },
-    time: "10:34 AM",
-    status: "read",
-  },
-  {
-    id: "m6",
-    senderId: "driver_jordan",
-    senderName: "Jordan Lee",
-    senderTag: "@jordan_ev",
-    roomId: "drivemate-hq",
-    text: "Pacific Coast EV Route Manifest and Charging Schedule attached.",
-    msgType: "pdf",
-    fileMeta: {
-      fileName: "Pacific_Coast_Route_Manifest.pdf",
-      fileSize: "245 KB",
-      mimeType: "application/pdf",
-    },
-    time: "10:41 AM",
-    status: "read",
-  },
-];
-
-const DEFAULT_DRIVERS = [
-  {
-    uid: "driver_jordan",
-    fullName: "Jordan Lee",
-    username: "jordan_ev",
-    email: "jordan@drivemate.com",
-    location: "San Francisco, CA",
-    drivingStyle: "EV Highway",
-    vehicleName: "2024 Tesla Model Y",
-  },
-  {
-    uid: "driver_elena",
-    fullName: "Elena Rostova",
-    username: "elena_m3",
-    email: "elena@drivemate.com",
-    location: "Seattle, WA",
-    drivingStyle: "Commute",
-    vehicleName: "2023 Tesla Model 3",
-  },
-  {
-    uid: "driver_marcus",
-    fullName: "Marcus Vance",
-    username: "marcus_v",
-    email: "marcus@drivemate.com",
-    location: "San Francisco, CA",
-    drivingStyle: "Road Trip",
-    vehicleName: "2024 Rivian R1T",
-  },
-  {
-    uid: "driver_devon",
-    fullName: "Devon Clark",
-    username: "devon_c",
-    email: "devon@drivemate.com",
-    location: "Austin, TX",
-    drivingStyle: "AWD Explorer",
-    vehicleName: "2022 Subaru Outback",
-  },
-  {
-    uid: "driver_sarah",
-    fullName: "Sarah Jenkins",
-    username: "sarah_j",
-    email: "sarah@drivemate.com",
-    location: "Denver, CO",
-    drivingStyle: "Mountain Drive",
-    vehicleName: "2024 Ford F-150 Lightning",
   },
 ];
 
@@ -147,7 +28,7 @@ export const getDrivers = async (req, res) => {
     // Query real users from database
     const dbUsers = await User.find(
       currentUserId ? { uid: { $ne: currentUserId } } : {},
-      'uid fullName username email location drivingStyle vehicles'
+      'uid fullName username email location drivingStyle vehicles profilePicture photoUrl'
     ).limit(30).lean();
 
     if (dbUsers && dbUsers.length > 0) {
@@ -159,15 +40,12 @@ export const getDrivers = async (req, res) => {
         location: u.location || 'United States',
         drivingStyle: u.drivingStyle || 'Commute',
         vehicleName: u.vehicles && u.vehicles[0] ? u.vehicles[0].name : 'Primary Vehicle',
+        profilePicture: u.profilePicture || u.photoUrl || null,
+        photoUrl: u.profilePicture || u.photoUrl || null,
       }));
     }
 
-    // Merge default discoverable drivers if database has few records
-    for (const d of DEFAULT_DRIVERS) {
-      if (d.uid !== currentUserId && !drivers.some(item => item.uid === d.uid || item.email === d.email)) {
-        drivers.push(d);
-      }
-    }
+    // Only return registered drivers from the database
 
     // Annotate connection statuses for current user
     let userConnections = [];
@@ -290,6 +168,21 @@ export const sendRequest = async (req, res) => {
       io.emit(`request_${targetUserId}`, newRequest);
     }
 
+    // Send email notification to recipient
+    try {
+      const recipient = await User.findOne({ uid: targetUserId }).lean();
+      if (recipient && recipient.email) {
+        emailService.sendConnectionInviteEmail({
+          toEmail: recipient.email,
+          recipientName: recipient.fullName || targetName,
+          senderName: fromUser.fullName || 'A Driver',
+          senderTag: fromUser.username ? `@${fromUser.username}` : '@driver',
+        }).catch((err) => console.warn('Email dispatch warning:', err.message));
+      }
+    } catch (e) {
+      console.warn('Failed to find recipient for invite email:', e.message);
+    }
+
     return res.status(201).json({
       success: true,
       message: `Connection request dispatched to ${targetName}.`,
@@ -325,7 +218,7 @@ export const respondRequest = async (req, res) => {
     connection.status = action === 'accept' ? 'accepted' : 'declined';
     await connection.save();
 
-    // If accepted, seed a greeting message in the private room
+    // If accepted, seed a greeting message in the private room and send email notification
     if (action === 'accept') {
       await Message.create({
         id: `msg_seed_${Date.now()}`,
@@ -337,6 +230,20 @@ export const respondRequest = async (req, res) => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'delivered',
       });
+
+      try {
+        const sender = await User.findOne({ uid: connection.fromUserId }).lean();
+        if (sender && sender.email) {
+          emailService.sendConnectionAcceptedEmail({
+            toEmail: sender.email,
+            senderName: sender.fullName || connection.fromUserName,
+            acceptorName: connection.toUserName,
+            acceptorTag: connection.toUserTag,
+          }).catch((err) => console.warn('Accept email warning:', err.message));
+        }
+      } catch (e) {
+        console.warn('Failed to find sender for accept email:', e.message);
+      }
     }
 
     const io = req.app.get('io');
@@ -391,7 +298,10 @@ export const getConversations = async (req, res) => {
       const partnerName = isFromMe ? c.toUserName : c.fromUserName;
       const partnerTag = isFromMe ? c.toUserTag : c.fromUserTag;
 
-      const latestMsg = await Message.findOne({ roomId: c.roomId }).sort({ createdAt: -1 }).lean();
+      const [latestMsg, partnerUser] = await Promise.all([
+        Message.findOne({ roomId: c.roomId }).sort({ createdAt: -1 }).lean(),
+        User.findOne({ uid: partnerId }, 'profilePicture photoUrl').lean(),
+      ]);
 
       conversations.push({
         id: c.id,
@@ -399,6 +309,7 @@ export const getConversations = async (req, res) => {
         partnerId,
         name: partnerName,
         tag: partnerTag,
+        avatar: partnerUser?.profilePicture || partnerUser?.photoUrl || null,
         isGroup: false,
         lastMessage: latestMsg ? latestMsg.text : 'Connected! Tap to send a message.',
         lastTime: latestMsg ? latestMsg.time : 'Just now',

@@ -35,36 +35,9 @@ interface Vehicle {
   serviceDue: string;
 }
 
-const INITIAL_VEHICLES: Vehicle[] = [
-  {
-    id: "v1",
-    name: "Tesla Model 3 Long Range",
-    year: "2024",
-    type: "EV",
-    plate: "9DM-774",
-    vin: "5YJ3E1EB7PF881290",
-    odometer: "14,250 mi",
-    batteryOrFuel: "82% Battery (272 mi)",
-    isPrimary: true,
-    serviceDue: "Tire rotation in 3,500 mi",
-  },
-  {
-    id: "v2",
-    name: "Porsche 911 GT3 Touring",
-    year: "2022",
-    type: "Gas",
-    plate: "GT3-CALI",
-    vin: "WP0AC2A98NS219044",
-    odometer: "6,800 mi",
-    batteryOrFuel: "Full Tank (93 Oct)",
-    isPrimary: false,
-    serviceDue: "Annual fluid check in 4,200 mi",
-  },
-];
-
 const MyVehiclesScreen: React.FC = () => {
   const navigation = useNavigation();
-  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Add form fields
@@ -79,7 +52,7 @@ const MyVehiclesScreen: React.FC = () => {
     async function fetchGarage() {
       try {
         const res = await vehiclesAPI.getVehicles();
-        if (res.success && Array.isArray(res.vehicles) && res.vehicles.length > 0) {
+        if (res.success && Array.isArray(res.vehicles)) {
           setVehicles(res.vehicles);
         }
       } catch {}
@@ -191,65 +164,75 @@ const MyVehiclesScreen: React.FC = () => {
         {/* Vehicles List */}
         <Text style={styles.sectionTitle}>Registered Vehicles</Text>
 
-        {vehicles.map((v) => (
-          <View key={v.id} style={styles.vehicleCard}>
-            <View style={styles.cardTopRow}>
-              <View style={styles.titleArea}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.vehicleYear}>{v.year}</Text>
-                  <Text style={styles.vehicleName}>{v.name}</Text>
-                </View>
-                <Text style={styles.plateText}>Plate: {v.plate}</Text>
-              </View>
-
-              {v.isPrimary ? (
-                <View style={styles.primaryBadge}>
-                  <CheckCircleIcon size={12} color="#09090b" />
-                  <Text style={styles.primaryBadgeText}>PRIMARY</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.setPrimaryBtn}
-                  onPress={() => handleSetPrimary(v.id)}
-                >
-                  <Text style={styles.setPrimaryText}>Set Primary</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Vehicle Specs Grid */}
-            <View style={styles.specsGrid}>
-              <View style={styles.specBox}>
-                <Text style={styles.specLabel}>Status</Text>
-                <Text style={styles.specValue}>{v.batteryOrFuel}</Text>
-              </View>
-              <View style={styles.specBox}>
-                <Text style={styles.specLabel}>Odometer</Text>
-                <Text style={styles.specValue}>{v.odometer}</Text>
-              </View>
-              <View style={styles.specBox}>
-                <Text style={styles.specLabel}>Powertrain</Text>
-                <Text style={styles.specValue}>{v.type}</Text>
-              </View>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.cardFooter}>
-              <View style={styles.vinInfo}>
-                <Text style={styles.vinText}>VIN: {v.vin}</Text>
-                <Text style={styles.serviceText}>• {v.serviceDue}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => handleDelete(v.id, v.name)}
-                activeOpacity={0.7}
-              >
-                <TrashIcon size={16} color="#a1a1aa" />
-              </TouchableOpacity>
-            </View>
+        {vehicles.length === 0 ? (
+          <View style={styles.emptyGarageCard}>
+            <CarIcon size={32} color="#a1a1aa" />
+            <Text style={styles.emptyGarageTitle}>Your Garage is Empty</Text>
+            <Text style={styles.emptyGarageSub}>
+              Register your vehicle to track maintenance, battery/fuel status, and service schedules.
+            </Text>
           </View>
-        ))}
+        ) : (
+          vehicles.map((v) => (
+            <View key={v.id} style={styles.vehicleCard}>
+              <View style={styles.cardTopRow}>
+                <View style={styles.titleArea}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.vehicleYear}>{v.year}</Text>
+                    <Text style={styles.vehicleName}>{v.name}</Text>
+                  </View>
+                  <Text style={styles.plateText}>Plate: {v.plate}</Text>
+                </View>
+
+                {v.isPrimary ? (
+                  <View style={styles.primaryBadge}>
+                    <CheckCircleIcon size={12} color="#09090b" />
+                    <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.setPrimaryBtn}
+                    onPress={() => handleSetPrimary(v.id)}
+                  >
+                    <Text style={styles.setPrimaryText}>Set Primary</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Vehicle Specs Grid */}
+              <View style={styles.specsGrid}>
+                <View style={styles.specBox}>
+                  <Text style={styles.specLabel}>Status</Text>
+                  <Text style={styles.specValue}>{v.batteryOrFuel || "Optimal"}</Text>
+                </View>
+                <View style={styles.specBox}>
+                  <Text style={styles.specLabel}>Odometer</Text>
+                  <Text style={styles.specValue}>{v.odometer || "0 mi"}</Text>
+                </View>
+                <View style={styles.specBox}>
+                  <Text style={styles.specLabel}>Powertrain</Text>
+                  <Text style={styles.specValue}>{v.type}</Text>
+                </View>
+              </View>
+
+              {/* Footer */}
+              <View style={styles.cardFooter}>
+                <View style={styles.vinInfo}>
+                  <Text style={styles.vinText}>VIN: {v.vin}</Text>
+                  <Text style={styles.serviceText}>• {v.serviceDue || "All systems nominal"}</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => handleDelete(v.id, v.name)}
+                  activeOpacity={0.7}
+                >
+                  <TrashIcon size={16} color="#a1a1aa" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
 
         {/* Add Vehicle Button */}
         <TouchableOpacity
@@ -258,7 +241,9 @@ const MyVehiclesScreen: React.FC = () => {
           activeOpacity={0.8}
         >
           <PlusIcon size={18} color="#09090b" />
-          <Text style={styles.bigAddBtnText}>Add Another Vehicle</Text>
+          <Text style={styles.bigAddBtnText}>
+            {vehicles.length === 0 ? "Register Your Vehicle" : "Add Another Vehicle"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -466,6 +451,28 @@ const styles = StyleSheet.create({
     color: "#09090b",
     marginBottom: 12,
     letterSpacing: -0.2,
+  },
+  emptyGarageCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    padding: 32,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    gap: 8,
+  },
+  emptyGarageTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  emptyGarageSub: {
+    fontSize: 13,
+    color: "#71717a",
+    textAlign: "center",
+    lineHeight: 18,
   },
   vehicleCard: {
     backgroundColor: "#ffffff",

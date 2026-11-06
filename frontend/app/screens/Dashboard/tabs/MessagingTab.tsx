@@ -35,11 +35,13 @@ import {
 import { getSocket } from "../../../services/socket";
 import {
   messagesAPI,
+  mediaAPI,
   DriverProfile,
   ConnectionRequestItem,
   ConversationItem,
 } from "../../../services/api";
 import { getUserProfile, StoredUserProfile } from "../../../services/storage";
+import * as ImagePicker from "expo-image-picker";
 
 interface ChatMessage {
   id: string;
@@ -94,6 +96,7 @@ const MessagingTab: React.FC = () => {
   const [customPhotoUrl, setCustomPhotoUrl] = useState("");
   const [photoCaption, setPhotoCaption] = useState("");
   const [customAddress, setCustomAddress] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Requests state
   const [incomingRequests, setIncomingRequests] = useState<ConnectionRequestItem[]>([]);
@@ -323,6 +326,70 @@ const MessagingTab: React.FC = () => {
       );
     } catch (err: any) {
       console.warn("Error persisting rich message:", err.message);
+    }
+  };
+
+  // Pick and upload image from device (Gallery or Camera)
+  const handlePickAndUploadMessagePhoto = async (useCamera = false) => {
+    try {
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission needed", "Camera permission is required to capture photos.");
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission needed", "Gallery permission is required to select photos.");
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.7,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.7,
+            base64: true,
+          });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploadingPhoto(true);
+
+      const fileData = asset.base64
+        ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+        : asset.uri;
+
+      const uploadRes = await mediaAPI.uploadMedia({
+        fileData,
+        fileType: "photo",
+        fileName: asset.fileName || `chat_image_${Date.now()}.jpg`,
+      });
+
+      const finalUrl = uploadRes?.mediaUrl || asset.uri;
+
+      await handleSendRichMessage({
+        msgType: "photo",
+        mediaUrl: finalUrl,
+        text: photoCaption.trim() || "📷 Shared a photo",
+      });
+    } catch (err: any) {
+      Alert.alert("Upload Failed", err.message || "Could not upload image. Please try again.");
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -617,61 +684,105 @@ const MessagingTab: React.FC = () => {
         {/* Attachment Options Drawer */}
         {isAttachmentMenuOpen && (
           <View style={styles.attachmentBar}>
-            <TouchableOpacity
-              style={styles.attachmentOption}
-              onPress={() => {
-                setIsAttachmentMenuOpen(false);
-                setIsPhotoModalOpen(true);
-              }}
-              activeOpacity={0.75}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.attachmentScrollContent}
             >
-              <View style={styles.attachmentIconCircle}>
-                <CameraIcon size={18} color="#09090b" />
-              </View>
-              <Text style={styles.attachmentOptionText}>Photo</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  handlePickAndUploadMessagePhoto(false);
+                }}
+                disabled={isUploadingPhoto}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.attachmentIconCircle, { backgroundColor: "#e0e7ff", borderColor: "#c7d2fe" }]}>
+                  <CameraIcon size={18} color="#4338ca" />
+                </View>
+                <Text style={styles.attachmentOptionText}>Upload</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.attachmentOption}
-              onPress={() => {
-                setIsAttachmentMenuOpen(false);
-                setIsLocationModalOpen(true);
-              }}
-              activeOpacity={0.75}
-            >
-              <View style={styles.attachmentIconCircle}>
-                <MapPinIcon size={18} color="#09090b" />
-              </View>
-              <Text style={styles.attachmentOptionText}>Location</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  handlePickAndUploadMessagePhoto(true);
+                }}
+                disabled={isUploadingPhoto}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.attachmentIconCircle, { backgroundColor: "#fef3c7", borderColor: "#fde68a" }]}>
+                  <CameraIcon size={18} color="#d97706" />
+                </View>
+                <Text style={styles.attachmentOptionText}>Camera</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.attachmentOption}
-              onPress={() => {
-                setIsAttachmentMenuOpen(false);
-                setIsVoiceModalOpen(true);
-              }}
-              activeOpacity={0.75}
-            >
-              <View style={styles.attachmentIconCircle}>
-                <MicIcon size={18} color="#09090b" />
-              </View>
-              <Text style={styles.attachmentOptionText}>Voice Memo</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  setIsPhotoModalOpen(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={styles.attachmentIconCircle}>
+                  <SparklesIcon size={18} color="#09090b" />
+                </View>
+                <Text style={styles.attachmentOptionText}>Photo URL</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.attachmentOption}
-              onPress={() => {
-                setIsAttachmentMenuOpen(false);
-                setIsPdfModalOpen(true);
-              }}
-              activeOpacity={0.75}
-            >
-              <View style={styles.attachmentIconCircle}>
-                <FileTextIcon size={18} color="#09090b" />
-              </View>
-              <Text style={styles.attachmentOptionText}>PDF Doc</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  setIsLocationModalOpen(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={styles.attachmentIconCircle}>
+                  <MapPinIcon size={18} color="#09090b" />
+                </View>
+                <Text style={styles.attachmentOptionText}>Location</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  setIsVoiceModalOpen(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={styles.attachmentIconCircle}>
+                  <MicIcon size={18} color="#09090b" />
+                </View>
+                <Text style={styles.attachmentOptionText}>Voice Memo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.attachmentOption}
+                onPress={() => {
+                  setIsAttachmentMenuOpen(false);
+                  setIsPdfModalOpen(true);
+                }}
+                activeOpacity={0.75}
+              >
+                <View style={styles.attachmentIconCircle}>
+                  <FileTextIcon size={18} color="#09090b" />
+                </View>
+                <Text style={styles.attachmentOptionText}>PDF Doc</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Uploading Status Banner */}
+        {isUploadingPhoto && (
+          <View style={styles.uploadingNoticeBar}>
+            <ActivityIndicator size="small" color="#09090b" />
+            <Text style={styles.uploadingNoticeText}>Uploading photo to Cloudinary...</Text>
           </View>
         )}
 
@@ -729,49 +840,74 @@ const MessagingTab: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalSubtitle}>
-                Select Cloudinary Road Photo or provide image URL:
-              </Text>
+              {/* Direct Device Upload Options */}
+              <View style={styles.photoUploadActionsRow}>
+                <TouchableOpacity
+                  style={styles.photoUploadActionBtn}
+                  onPress={() => handlePickAndUploadMessagePhoto(false)}
+                  disabled={isUploadingPhoto}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.photoUploadIconWrap, { backgroundColor: "#e0e7ff" }]}>
+                    <PlusIcon size={16} color="#4338ca" />
+                  </View>
+                  <View style={styles.photoUploadTextWrap}>
+                    <Text style={styles.photoUploadBtnTitle}>Choose Gallery</Text>
+                    <Text style={styles.photoUploadBtnSub}>Select from phone</Text>
+                  </View>
+                </TouchableOpacity>
 
-              {/* Photo Presets Grid */}
-              <View style={styles.photoGrid}>
-                {[
-                  {
-                    title: "Rocklin Supercharger",
-                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
-                  },
-                  {
-                    title: "Donner Snow Highway",
-                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1498084393753-b411b2d26b34?w=800",
-                  },
-                  {
-                    title: "Rivian Mountain Run",
-                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800",
-                  },
-                  {
-                    title: "Pacific Coast Highway",
-                    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800",
-                  },
-                ].map((item, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.photoCardChoice}
-                    onPress={() => {
-                      handleSendRichMessage({
-                        msgType: "photo",
-                        mediaUrl: item.url,
-                        text: photoCaption.trim() || `📷 ${item.title}`,
-                      });
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Image source={{ uri: item.url }} style={styles.photoCardThumbnail} />
-                    <Text style={styles.photoCardChoiceText} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity
+                  style={styles.photoUploadActionBtn}
+                  onPress={() => handlePickAndUploadMessagePhoto(true)}
+                  disabled={isUploadingPhoto}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.photoUploadIconWrap, { backgroundColor: "#fef3c7" }]}>
+                    <CameraIcon size={16} color="#d97706" />
+                  </View>
+                  <View style={styles.photoUploadTextWrap}>
+                    <Text style={styles.photoUploadBtnTitle}>Take Photo</Text>
+                    <Text style={styles.photoUploadBtnSub}>Capture now</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
+
+              {isUploadingPhoto && (
+                <View style={styles.photoModalUploadingBox}>
+                  <ActivityIndicator size="small" color="#09090b" />
+                  <Text style={styles.photoModalUploadingText}>Uploading photo to Cloudinary...</Text>
+                </View>
+              )}
+
+              {/* URL Input option */}
+              <View style={styles.photoUrlInputRow}>
+                <TextInput
+                  style={styles.photoUrlInput}
+                  placeholder="Or paste image URL (https://...)"
+                  placeholderTextColor="#a1a1aa"
+                  value={customPhotoUrl}
+                  onChangeText={setCustomPhotoUrl}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={[styles.photoUrlSendBtn, !customPhotoUrl.trim() && styles.photoUrlSendBtnDisabled]}
+                  onPress={() => {
+                    if (!customPhotoUrl.trim()) return;
+                    handleSendRichMessage({
+                      msgType: "photo",
+                      mediaUrl: customPhotoUrl.trim(),
+                      text: photoCaption.trim() || "📷 Shared a photo",
+                    });
+                  }}
+                  disabled={!customPhotoUrl.trim()}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.photoUrlSendBtnText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+
+
 
               <TextInput
                 style={styles.modalInput}
@@ -1177,9 +1313,13 @@ const MessagingTab: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={styles.convAvatar}>
-                    <Text style={styles.convAvatarText}>
-                      {item.name.charAt(0).toUpperCase()}
-                    </Text>
+                    {item.avatar ? (
+                      <Image source={{ uri: item.avatar }} style={styles.convAvatarImg} />
+                    ) : (
+                      <Text style={styles.convAvatarText}>
+                        {item.name.charAt(0).toUpperCase()}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.convDetails}>
@@ -1302,9 +1442,16 @@ const MessagingTab: React.FC = () => {
               return (
                 <View key={d.uid} style={styles.driverCard}>
                   <View style={styles.driverAvatar}>
-                    <Text style={styles.driverAvatarText}>
-                      {d.fullName.charAt(0).toUpperCase()}
-                    </Text>
+                    {d.photoUrl || d.profilePicture ? (
+                      <Image
+                        source={{ uri: d.photoUrl || d.profilePicture }}
+                        style={styles.driverAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.driverAvatarText}>
+                        {d.fullName.charAt(0).toUpperCase()}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.driverDetails}>
@@ -1341,7 +1488,19 @@ const MessagingTab: React.FC = () => {
                   ) : (
                     <TouchableOpacity
                       style={styles.connectBtn}
-                      onPress={() => handleSendConnectionRequest(d.uid)}
+                      onPress={() => {
+                        Alert.alert(
+                          "Send Connection Invite?",
+                          `Would you like to send an invite to ${d.fullName} (@${d.username}) to start messaging?`,
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Send Invite",
+                              onPress: () => handleSendConnectionRequest(d.uid),
+                            },
+                          ]
+                        );
+                      }}
                       disabled={isSending}
                       activeOpacity={0.8}
                     >
@@ -1479,6 +1638,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  convAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
   },
   convAvatarText: {
     color: "#ffffff",
@@ -1687,6 +1852,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  driverAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
   },
   driverAvatarText: {
     color: "#ffffff",
@@ -1940,9 +2111,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderTopWidth: 1,
     borderTopColor: "#f4f4f5",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    justifyContent: "space-between",
+  },
+  attachmentScrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    paddingHorizontal: 4,
+  },
+  uploadingNoticeBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f4f4f5",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e4e4e7",
+  },
+  uploadingNoticeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#09090b",
   },
   attachmentOption: {
     alignItems: "center",
@@ -2207,6 +2399,91 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#71717a",
     marginBottom: 14,
+  },
+  photoUploadActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  photoUploadActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 8,
+  },
+  photoUploadIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoUploadTextWrap: {
+    flex: 1,
+  },
+  photoUploadBtnTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  photoUploadBtnSub: {
+    fontSize: 10,
+    color: "#64748b",
+  },
+  photoModalUploadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eff6ff",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    marginBottom: 12,
+  },
+  photoModalUploadingText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1d4ed8",
+  },
+  photoUrlInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  photoUrlInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 12,
+    fontSize: 12,
+    color: "#09090b",
+    backgroundColor: "#fafafa",
+  },
+  photoUrlSendBtn: {
+    height: 40,
+    paddingHorizontal: 14,
+    backgroundColor: "#09090b",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoUrlSendBtnDisabled: {
+    opacity: 0.4,
+  },
+  photoUrlSendBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   modalInput: {
     height: 42,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -16,10 +17,21 @@ import {
   LockIcon,
   BellIcon,
   ShieldIcon,
+  TrashIcon,
 } from "../../components/Icons";
+import { authAPI } from "../../services/api";
+import { getUserProfile } from "../../services/storage";
 
 const SettingsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    getUserProfile().then((u) => {
+      if (u?.email) setUserEmail(u.email);
+    });
+  }, []);
 
   // Notifications
   const [trafficAlerts, setTrafficAlerts] = useState(true);
@@ -45,6 +57,49 @@ const SettingsScreen: React.FC = () => {
           text: "Clear Cache",
           onPress: () => {
             Alert.alert("Cache Cleared", "42.8 MB of offline data has been cleared.");
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account?",
+      "Are you sure you want to permanently delete your Drivemate account? All your vehicles, routes, profile details, and community posts will be erased immediately. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Permanently",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsDeleting(true);
+              const res = await authAPI.deleteAccount();
+              if (res.success) {
+                Alert.alert(
+                  "Account Deleted",
+                  "Your account has been permanently removed.",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: "Login" }],
+                        });
+                      },
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert("Error", res.error || "Failed to delete account. Please try again.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.message || "An unexpected error occurred.");
+            } finally {
+              setIsDeleting(false);
+            }
           },
         },
       ]
@@ -170,7 +225,7 @@ const SettingsScreen: React.FC = () => {
             onPress={() =>
               Alert.alert(
                 "Change Password",
-                "A password reset link will be dispatched to alex@drivemate.com."
+                `A password reset link will be dispatched to ${userEmail || "your registered email"}.`
               )
             }
           >
@@ -224,6 +279,32 @@ const SettingsScreen: React.FC = () => {
               <Text style={styles.rowSub}>Free up local storage (42.8 MB)</Text>
             </View>
             <ChevronRightIcon size={18} color="#a1a1aa" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone / Delete Account */}
+        <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Danger Zone</Text>
+        <View style={[styles.card, styles.dangerCard]}>
+          <TouchableOpacity
+            style={styles.navRow}
+            onPress={handleDeleteAccount}
+            disabled={isDeleting}
+            activeOpacity={0.7}
+          >
+            <View style={styles.dangerIconWrap}>
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#ef4444" />
+              ) : (
+                <TrashIcon size={18} color="#ef4444" />
+              )}
+            </View>
+            <View style={styles.rowInfo}>
+              <Text style={[styles.rowLabel, { color: "#ef4444" }]}>Delete Account</Text>
+              <Text style={styles.rowSub}>
+                Permanently erase your account, profile, vehicles, and posts
+              </Text>
+            </View>
+            <ChevronRightIcon size={18} color="#ef4444" />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -325,6 +406,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#09090b",
+  },
+  dangerCard: {
+    borderColor: "#fecaca",
+    backgroundColor: "#fffafa",
+  },
+  dangerIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#fee2e2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
 });
 

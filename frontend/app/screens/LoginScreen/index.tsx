@@ -268,29 +268,11 @@ const LoginScreen: React.FC = () => {
             </View>
 
             <Text style={styles.sheetSubtitle}>
-              Choose an account to continue to Drivemate
+              Enter your Google account to continue to Drivemate
             </Text>
 
-            {/* Primary Google Account Card */}
-            <TouchableOpacity
-              style={styles.googleAccountCard}
-              onPress={() => executeGoogleLogin("kkanth355@gmail.com", "krishnakanth2109")}
-              disabled={isAuthenticatingGoogle}
-              activeOpacity={0.8}
-            >
-              <View style={styles.accountAvatar}>
-                <Text style={styles.accountAvatarText}>K</Text>
-              </View>
-              <View style={styles.accountDetails}>
-                <Text style={styles.accountName}>krishnakanth2109</Text>
-                <Text style={styles.accountEmail}>kkanth355@gmail.com</Text>
-              </View>
-              <CheckCircleIcon size={18} color="#10b981" />
-            </TouchableOpacity>
-
-            {/* Custom Google Account Option */}
+            {/* Google Account Input */}
             <View style={styles.customAccountBox}>
-              <Text style={styles.customAccountLabel}>Or enter another Google account:</Text>
               <View style={styles.customInputRow}>
                 <TextInput
                   style={styles.customAccountInput}
@@ -310,7 +292,7 @@ const LoginScreen: React.FC = () => {
                   disabled={!customGoogleEmail.trim() || isAuthenticatingGoogle}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.customSignInBtnText}>Sign In</Text>
+                  <Text style={styles.customSignInBtnText}>Continue</Text>
                 </TouchableOpacity>
               </View>
             </View>

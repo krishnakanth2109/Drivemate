@@ -30,29 +30,19 @@ interface HomeTabProps {
   posts: PostItem[];
   onToggleLike: (id: string) => void;
   onOpenCreatePost: () => void;
-  onOpenPaymentModal: () => void;
   onNavigateTab?: (tab: "home" | "messaging" | "updates" | "services" | "profile") => void;
-  freePostsUsed: number;
-  maxFreePosts: number;
-  isProUser: boolean;
-  singlePasses?: number;
   userName?: string;
+  userAvatar?: string;
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({
   posts,
   onToggleLike,
   onOpenCreatePost,
-  onOpenPaymentModal,
   onNavigateTab,
-  freePostsUsed,
-  maxFreePosts,
-  isProUser,
-  singlePasses = 0,
-  userName = "Alex Morgan",
+  userName = "Driver",
+  userAvatar,
 }) => {
-  const freeRemaining = Math.max(0, maxFreePosts - freePostsUsed);
-
   // Driver Profile Modal State
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
@@ -91,10 +81,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
       uid: post.userId || `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`,
       fullName: post.author,
       username: post.authorTag.replace(/^@/, ""),
-      email: `${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}@drivemate.com`,
-      location: post.fromCity || "San Francisco, CA",
-      drivingStyle: post.tag?.replace("#", "") || "Highway Commute",
-      vehicleName: "Drivemate Certified Vehicle",
+      email: "",
+      location: post.fromCity || "Driver",
+      drivingStyle: post.tag?.replace("#", "") || "Community Driver",
+      vehicleName: "Registered Driver",
       connectionStatus: isSelf ? "accepted" : "none",
     };
 
@@ -103,33 +93,105 @@ const HomeTab: React.FC<HomeTabProps> = ({
     setIsDriverModalVisible(true);
   };
 
-  const handleSendConnectionRequest = async () => {
-    if (!selectedDriver) return;
+  const sendInviteToDriver = async (driver: DriverProfile) => {
     setIsSendingRequest(true);
-
     try {
       const res = await messagesAPI.sendRequest(
-        selectedDriver.uid,
-        selectedDriver.fullName,
-        `@${selectedDriver.username}`
+        driver.uid,
+        driver.fullName,
+        `@${driver.username}`
       );
 
       if (res.success) {
-        setSelectedDriver((prev) =>
-          prev ? { ...prev, connectionStatus: "pending", isSender: true } : null
+        setDriversList((prev) =>
+          prev.map((d) =>
+            d.uid === driver.uid
+              ? { ...d, connectionStatus: "pending", isSender: true }
+              : d
+          )
         );
         refreshDrivers();
         Alert.alert(
-          "Request Dispatched!",
-          `Connection request sent to ${selectedDriver.fullName}. Once accepted, you can send direct messages, photos, locations, and documents.`
+          "Invite Sent!",
+          `Connection invite sent to ${driver.fullName}. Once they accept, you will receive an email confirmation and can chat directly in Driver Comms.`
         );
       } else {
-        Alert.alert("Unable to send request", res.error || "Please try again later.");
+        Alert.alert("Unable to send invite", res.error || "Please try again later.");
       }
     } catch (err: any) {
-      Alert.alert("Request Error", err.message || "Network error sending request.");
+      Alert.alert("Request Error", err.message || "Network error sending invitation.");
     } finally {
       setIsSendingRequest(false);
+    }
+  };
+
+  const handleSendConnectionRequest = async () => {
+    if (!selectedDriver) return;
+    Alert.alert(
+      "Send Connection Invite?",
+      `Would you like to send an invitation to ${selectedDriver.fullName} (@${selectedDriver.username}) to start messaging?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send Invite",
+          onPress: async () => {
+            await sendInviteToDriver(selectedDriver);
+            setSelectedDriver((prev) =>
+              prev ? { ...prev, connectionStatus: "pending", isSender: true } : null
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleTapMessageOnPost = (post: PostItem) => {
+    const isSelf =
+      post.author.toLowerCase() === userName.toLowerCase() ||
+      post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;
+
+    if (isSelf) {
+      if (onNavigateTab) onNavigateTab("profile");
+      return;
+    }
+
+    const matched = driversList.find(
+      (d) =>
+        (post.userId && d.uid === post.userId) ||
+        d.username.toLowerCase() === post.authorTag.replace(/^@/, "").toLowerCase() ||
+        d.fullName.toLowerCase() === post.author.toLowerCase()
+    );
+
+    const driverData: DriverProfile = matched || {
+      uid: post.userId || `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`,
+      fullName: post.author,
+      username: post.authorTag.replace(/^@/, ""),
+      email: "",
+      location: post.fromCity || "Driver",
+      drivingStyle: post.tag?.replace("#", "") || "Community Driver",
+      vehicleName: "Registered Driver",
+      connectionStatus: "none",
+    };
+
+    if (driverData.connectionStatus === "accepted") {
+      if (onNavigateTab) onNavigateTab("messaging");
+    } else if (driverData.connectionStatus === "pending") {
+      Alert.alert(
+        "Invite Pending",
+        `You have already sent a connection invitation to ${driverData.fullName}. Waiting for them to accept.`
+      );
+    } else {
+      Alert.alert(
+        "Send Connection Invite?",
+        `Would you like to send an invitation to ${driverData.fullName} (@${driverData.username}) to start messaging?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Send Invite",
+            onPress: () => sendInviteToDriver(driverData),
+          },
+        ]
+      );
     }
   };
 
@@ -172,9 +234,13 @@ const HomeTab: React.FC<HomeTabProps> = ({
         <View style={styles.composeCard}>
           <View style={styles.composeTopRow}>
             <View style={styles.composeAvatar}>
-              <Text style={styles.composeAvatarText}>
-                {userName.charAt(0).toUpperCase()}
-              </Text>
+              {userAvatar ? (
+                <Image source={{ uri: userAvatar }} style={styles.composeAvatarImg} />
+              ) : (
+                <Text style={styles.composeAvatarText}>
+                  {userName.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             <TouchableOpacity
               style={styles.composeTrigger}
@@ -190,21 +256,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
           <View style={styles.composeDivider} />
 
           <View style={styles.composeBottomRow}>
-            {/* Post Allowance Pill */}
-            <TouchableOpacity
-              style={styles.tierStatusPill}
-              onPress={onOpenPaymentModal}
-              activeOpacity={0.7}
-            >
+            <View style={styles.communityBadgeWrap}>
               <SparklesIcon size={13} color="#09090b" />
-              <Text style={styles.tierStatusText}>
-                {isProUser
-                  ? "Pro Unlimited"
-                  : singlePasses > 0
-                  ? `${singlePasses} post pass${singlePasses > 1 ? "es" : ""} active`
-                  : `${freeRemaining} of ${maxFreePosts} free posts left`}
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.communityBadgeText}>Community Feed</Text>
+            </View>
 
             <TouchableOpacity
               style={styles.newPostBtn}
@@ -224,37 +279,47 @@ const HomeTab: React.FC<HomeTabProps> = ({
         </View>
 
         {/* Posts List */}
-        {posts.map((post) => (
-          <View key={post.id} style={styles.postCard}>
-            {/* Post Author Row - Clickable to open Driver Profile */}
-            <TouchableOpacity
-              style={styles.postAuthorRow}
-              onPress={() => handleOpenDriverProfile(post)}
-              activeOpacity={0.75}
-            >
-              <View style={styles.postAvatar}>
-                <Text style={styles.postAvatarText}>
-                  {post.author.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.authorMeta}>
-                <View style={styles.nameTagRow}>
-                  <Text style={styles.authorName}>{post.author}</Text>
-                  {post.tag && (
-                    <View style={styles.tagBadge}>
-                      <Text style={styles.tagBadgeText}>{post.tag}</Text>
-                    </View>
+        {posts.map((post) => {
+          const isPostAuthorSelf =
+            post.author.toLowerCase() === userName.toLowerCase() ||
+            post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;
+          const avatarSource = post.authorAvatar || (isPostAuthorSelf ? userAvatar : undefined);
+
+          return (
+            <View key={post.id} style={styles.postCard}>
+              {/* Post Author Row - Clickable to open Driver Profile */}
+              <TouchableOpacity
+                style={styles.postAuthorRow}
+                onPress={() => handleOpenDriverProfile(post)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.postAvatar}>
+                  {avatarSource ? (
+                    <Image source={{ uri: avatarSource }} style={styles.postAvatarImg} />
+                  ) : (
+                    <Text style={styles.postAvatarText}>
+                      {post.author.charAt(0).toUpperCase()}
+                    </Text>
                   )}
                 </View>
-                <Text style={styles.postTime}>
-                  {post.authorTag} • {post.timeAgo}
-                </Text>
-              </View>
+                <View style={styles.authorMeta}>
+                  <View style={styles.nameTagRow}>
+                    <Text style={styles.authorName}>{post.author}</Text>
+                    {post.tag && (
+                      <View style={styles.tagBadge}>
+                        <Text style={styles.tagBadgeText}>{post.tag}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.postTime}>
+                    {post.authorTag} • {post.timeAgo}
+                  </Text>
+                </View>
 
-              <View style={styles.profileBadgePill}>
-                <Text style={styles.profileBadgeText}>Profile ↗</Text>
-              </View>
-            </TouchableOpacity>
+                <View style={styles.profileBadgePill}>
+                  <Text style={styles.profileBadgeText}>Profile ↗</Text>
+                </View>
+              </TouchableOpacity>
 
             {/* Post Content */}
             <Text style={styles.postBody}>{post.content}</Text>
@@ -275,7 +340,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     <Text style={styles.routeSeats}>🚗 {post.availableSeats} seats</Text>
                   )}
                   {Boolean(post.pricePerSeat) && (
-                    <Text style={styles.routePrice}>{post.pricePerSeat}</Text>
+                    <Text style={styles.routePrice}>
+                      {post.pricePerSeat && post.pricePerSeat.replace(/\$/g, "").trim()
+                        ? `Carpool • ${post.pricePerSeat.replace(/\$/g, "").trim()}`
+                        : "Carpool"}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -395,7 +464,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => handleOpenDriverProfile(post)}
+                onPress={() => handleTapMessageOnPost(post)}
               >
                 <MessageIcon size={18} color="#71717a" />
                 <Text style={styles.actionText}>
@@ -412,7 +481,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-        ))}
+        );
+      })}
       </ScrollView>
 
       {/* Driver Profile & Connection Request Modal */}
@@ -444,9 +514,16 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 {/* Profile Top Card */}
                 <View style={styles.driverProfileTop}>
                   <View style={styles.driverBigAvatar}>
-                    <Text style={styles.driverBigAvatarText}>
-                      {selectedDriver.fullName.charAt(0).toUpperCase()}
-                    </Text>
+                    {selectedDriver.photoUrl || selectedDriver.profilePicture ? (
+                      <Image
+                        source={{ uri: selectedDriver.photoUrl || selectedDriver.profilePicture }}
+                        style={styles.driverBigAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.driverBigAvatarText}>
+                        {selectedDriver.fullName.charAt(0).toUpperCase()}
+                      </Text>
+                    )}
                     <View style={styles.verifiedDot}>
                       <CheckCircleIcon size={14} color="#10b981" />
                     </View>
@@ -646,6 +723,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#09090b",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  composeAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
   },
   composeAvatarText: {
     color: "#ffffff",
@@ -676,7 +759,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  tierStatusPill: {
+  communityBadgeWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -687,7 +770,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
   },
-  tierStatusText: {
+  communityBadgeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "#27272a",
@@ -750,6 +833,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+    overflow: "hidden",
+  },
+  postAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
   },
   postAvatarText: {
     color: "#ffffff",
@@ -957,6 +1046,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
     position: "relative",
+    overflow: "hidden",
+  },
+  driverBigAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 36,
   },
   driverBigAvatarText: {
     color: "#ffffff",

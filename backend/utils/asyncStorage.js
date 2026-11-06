@@ -126,6 +126,10 @@ class BackendAsyncStorage {
     await this.setItem(key, tokenData);
     if (metadata.uid) {
       await this.setItem(`user_active_token:${metadata.uid}`, token);
+      try {
+        const { User } = await import('../models/User.js');
+        await User.updateOne({ uid: metadata.uid }, { $set: { activeToken: token } });
+      } catch (err) {}
     }
     return tokenData;
   }
@@ -136,18 +140,37 @@ class BackendAsyncStorage {
    */
   async validateTokenSession(token) {
     const raw = await this.getItem(`token:${token}`);
-    if (!raw) return null;
-    try {
-      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (!data.active) return null;
-      if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
-        await this.revokeToken(token);
-        return null;
-      }
-      return data;
-    } catch {
-      return null;
+    if (raw) {
+      try {
+        const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (data.active) {
+          if (!data.expiresAt || new Date(data.expiresAt) >= new Date()) {
+            return data;
+          }
+          await this.revokeToken(token);
+        }
+      } catch {}
     }
+
+    // Persistent MongoDB Atlas lookup: persists across serverless/container sleep restarts
+    try {
+      const { User } = await import('../models/User.js');
+      const user = await User.findOne({ activeToken: token }).lean();
+      if (user) {
+        const sessionData = {
+          token,
+          uid: user.uid,
+          email: user.email,
+          fullName: user.fullName,
+          active: true,
+        };
+        // Re-cache into memory for fast subsequent calls
+        this.memoryCache.set(`token:${token}`, JSON.stringify(sessionData));
+        return sessionData;
+      }
+    } catch {}
+
+    return null;
   }
 
   /**

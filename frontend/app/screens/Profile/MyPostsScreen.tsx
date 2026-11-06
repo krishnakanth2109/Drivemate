@@ -61,8 +61,8 @@ const MyPostsScreen: React.FC = () => {
 
           const liked = res.posts.filter((p) => p.isLiked);
 
-          setMyPosts(mine.length > 0 ? mine : res.posts.slice(0, 3));
-          setLikedPosts(liked.length > 0 ? liked : res.posts.slice(0, 2));
+          setMyPosts(mine);
+          setLikedPosts(liked);
         }
       } catch {}
     }

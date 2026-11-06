@@ -16,7 +16,7 @@ const INITIAL_POSTS = [
     toCity: "Los Angeles, CA",
     departureTime: "Today • 04:30 PM",
     availableSeats: 3,
-    pricePerSeat: "$35",
+    pricePerSeat: "Shared Ride",
     link: "https://drivemate.com/routes/pacific-coast-run",
     linkTitle: "Pacific Coast EV Route Map & Charging Guide",
     tag: "#Carpool",
@@ -35,7 +35,7 @@ const INITIAL_POSTS = [
     toCity: "Portland, OR",
     departureTime: "Tomorrow • 07:30 AM",
     availableSeats: 2,
-    pricePerSeat: "$25",
+    pricePerSeat: "Carpool",
     tag: "#Commute",
     likes: 19,
     commentsCount: 3,
@@ -189,6 +189,32 @@ class DataStore {
     // 2. Update in AsyncStorage
     await asyncStorage.setItem(`user:${uid}`, merged);
     return merged;
+  }
+
+  async deleteUser(uid) {
+    // 1. Delete from MongoDB Atlas
+    if (this.isMongoReady()) {
+      try {
+        await User.deleteOne({ uid });
+        await Post.deleteMany({ userId: uid });
+      } catch (err) {
+        console.warn(`[MongoDB] deleteUser error: ${err.message}`);
+      }
+    }
+
+    // 2. Remove from AsyncStorage
+    await asyncStorage.removeItem(`user:${uid}`);
+
+    // 3. Remove from Firebase Auth if enabled
+    if (auth) {
+      try {
+        await auth.deleteUser(uid);
+      } catch (err) {
+        console.warn(`[Firebase] deleteUser error: ${err.message}`);
+      }
+    }
+
+    return true;
   }
 
   // --- POST OPERATIONS ---

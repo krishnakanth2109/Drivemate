@@ -11,14 +11,18 @@ import {
   Platform,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { CloseIcon, LinkIcon, SparklesIcon, CarIcon, CameraIcon } from "../Icons";
+import { mediaAPI } from "../../services/api";
 
 export interface PostItem {
   id: string;
   userId?: string;
   author: string;
   authorTag: string;
+  authorAvatar?: string;
   timeAgo: string;
   content: string;
   fromCity?: string;
@@ -49,13 +53,10 @@ interface CreatePostModalProps {
     linkTitle?: string;
     tag?: string;
     photos?: string[];
+    authorAvatar?: string;
   }) => void;
-  onOpenPaymentModal: () => void;
-  freePostsUsed: number;
-  maxFreePosts: number;
-  isProUser: boolean;
-  singlePasses?: number;
   userName?: string;
+  userAvatar?: string;
 }
 
 const CATEGORIES = [
@@ -67,42 +68,19 @@ const CATEGORIES = [
   "#EVCharging",
 ];
 
-const PRESET_POST_PHOTOS = [
-  {
-    title: "Rocklin Supercharger",
-    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=800",
-  },
-  {
-    title: "Donner Snow Highway",
-    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1498084393753-b411b2d26b34?w=800",
-  },
-  {
-    title: "Rivian Mountain Run",
-    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800",
-  },
-  {
-    title: "Pacific Coast Highway",
-    url: "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800",
-  },
-];
-
 const CreatePostModal: React.FC<CreatePostModalProps> = ({
   visible,
   onClose,
   onSubmitPost,
-  onOpenPaymentModal,
-  freePostsUsed,
-  maxFreePosts,
-  isProUser,
-  singlePasses = 0,
-  userName = "Alex Morgan",
+  userName = "Driver",
+  userAvatar,
 }) => {
   const [content, setContent] = useState("");
   const [fromCity, setFromCity] = useState("");
   const [toCity, setToCity] = useState("");
   const [departureTime, setDepartureTime] = useState("");
-  const [availableSeats, setAvailableSeats] = useState("3");
-  const [pricePerSeat, setPricePerSeat] = useState("$30");
+  const [availableSeats, setAvailableSeats] = useState("");
+  const [pricePerSeat, setPricePerSeat] = useState("");
   const [showRideFields, setShowRideFields] = useState(true);
 
   const [link, setLink] = useState("");
@@ -116,6 +94,72 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [photos, setPhotos] = useState<string[]>([]);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [customPhotoInput, setCustomPhotoInput] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handlePickAndUploadPhoto = async (useCamera = false) => {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert("Limit Reached", "You can attach a maximum of 3 photos per post.");
+      return;
+    }
+
+    try {
+      const permission = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          `Please grant ${useCamera ? "camera" : "photo gallery"} permission in device settings.`
+        );
+        return;
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            quality: 0.7,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            quality: 0.7,
+            base64: true,
+          });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploadingPhoto(true);
+
+      const fileData = asset.base64
+        ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+        : asset.uri;
+
+      const uploadRes = await mediaAPI.uploadMedia({
+        fileData,
+        fileType: "photo",
+        fileName: asset.fileName || `post_photo_${Date.now()}.jpg`,
+      });
+
+      if (uploadRes.success && uploadRes.mediaUrl) {
+        setPhotos((prev) => [...prev, uploadRes.mediaUrl]);
+        setShowPhotoPicker(false);
+      } else {
+        // Fallback to local image URI
+        setPhotos((prev) => [...prev, asset.uri]);
+        setShowPhotoPicker(false);
+      }
+    } catch (err: any) {
+      Alert.alert("Upload Error", err?.message || "Failed to pick and upload photo.");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const handleAddPhoto = (url: string) => {
     if (!url || !url.trim()) return;
@@ -140,16 +184,9 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setPhotos(photos.filter((_, i) => i !== index));
   };
 
-  const isLimitReached = !isProUser && singlePasses <= 0 && freePostsUsed >= maxFreePosts;
-
   const handlePublish = () => {
     if (!content.trim()) {
       Alert.alert("Empty Post", "Please write something before publishing.");
-      return;
-    }
-
-    if (isLimitReached) {
-      onOpenPaymentModal();
       return;
     }
 
@@ -169,6 +206,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
       linkTitle: linkTitle.trim() || undefined,
       tag: selectedTag,
       photos: photos.slice(0, MAX_PHOTOS),
+      authorAvatar: userAvatar || undefined,
     });
 
     // Reset fields
@@ -214,43 +252,22 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Author & Free Tier Counter */}
+            {/* Author */}
             <View style={styles.authorRow}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {userName.charAt(0).toUpperCase()}
-                </Text>
+                {userAvatar ? (
+                  <Image source={{ uri: userAvatar }} style={styles.authorAvatarImg} />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {userName.charAt(0).toUpperCase()}
+                  </Text>
+                )}
               </View>
               <View style={styles.authorInfo}>
                 <Text style={styles.authorName}>{userName}</Text>
-                <View style={styles.tierPill}>
-                  <SparklesIcon size={11} color="#09090b" />
-                  <Text style={styles.tierPillText}>
-                    {isProUser
-                      ? "Pro Unlimited"
-                      : singlePasses > 0
-                      ? `Single Pass Active (${singlePasses} left)`
-                      : `Free Tier: ${freePostsUsed}/${maxFreePosts} used`}
-                  </Text>
-                </View>
+                <Text style={styles.authorSub}>Posting to Community</Text>
               </View>
             </View>
-
-            {/* Limit Warning if 2 free posts used */}
-            {isLimitReached && (
-              <TouchableOpacity
-                style={styles.limitAlertBox}
-                onPress={onOpenPaymentModal}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.limitAlertTitle}>
-                  ⚠️ 2 Free Posts Limit Reached
-                </Text>
-                <Text style={styles.limitAlertSub}>
-                  Publishing this post requires an upgrade or pass. Tap here to unlock.
-                </Text>
-              </TouchableOpacity>
-            )}
 
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -443,17 +460,35 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
                 {/* Attach Action / Limit Notice */}
                 {photos.length < MAX_PHOTOS ? (
-                  <TouchableOpacity
-                    style={styles.addPhotoToggleBtn}
-                    onPress={() => setShowPhotoPicker(!showPhotoPicker)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.addPhotoToggleText}>
-                      {showPhotoPicker
-                        ? "Hide photo options"
-                        : `+ Attach Photo (${MAX_PHOTOS - photos.length} left)`}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.attachBtnRow}>
+                    <TouchableOpacity
+                      style={styles.directUploadBtn}
+                      onPress={() => handlePickAndUploadPhoto(false)}
+                      disabled={isUploadingPhoto}
+                      activeOpacity={0.8}
+                    >
+                      {isUploadingPhoto ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <CameraIcon size={14} color="#ffffff" />
+                      )}
+                      <Text style={styles.directUploadBtnText}>
+                        {isUploadingPhoto ? "Uploading..." : "Upload Photo"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.addPhotoToggleBtn}
+                      onPress={() => setShowPhotoPicker(!showPhotoPicker)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.addPhotoToggleText}>
+                        {showPhotoPicker
+                          ? "Hide options"
+                          : `More Options (${MAX_PHOTOS - photos.length} left)`}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View style={styles.maxPhotoNotice}>
                     <Text style={styles.maxPhotoNoticeText}>
@@ -465,45 +500,49 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 {/* Photo Picker Drawer */}
                 {showPhotoPicker && photos.length < MAX_PHOTOS && (
                   <View style={styles.photoPickerBox}>
-                    <Text style={styles.pickerSubheading}>
-                      Choose from travel presets or paste an image URL:
-                    </Text>
+                    {/* Device Upload Options */}
+                    <View style={styles.uploadOptionsBox}>
+                      <TouchableOpacity
+                        style={styles.uploadOptionBtn}
+                        onPress={() => handlePickAndUploadPhoto(false)}
+                        disabled={isUploadingPhoto}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.uploadOptionIconCircle}>
+                          <CameraIcon size={16} color="#09090b" />
+                        </View>
+                        <View style={styles.uploadOptionInfo}>
+                          <Text style={styles.uploadOptionTitle}>Choose from Gallery</Text>
+                          <Text style={styles.uploadOptionSub}>Upload photo from your phone</Text>
+                        </View>
+                      </TouchableOpacity>
 
-                    {/* Presets Horizontal Scroll */}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.presetsScroll}
-                    >
-                      {PRESET_POST_PHOTOS.map((preset, idx) => {
-                        const isAdded = photos.includes(preset.url);
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            style={[
-                              styles.presetCard,
-                              isAdded && styles.presetCardDisabled,
-                            ]}
-                            onPress={() => handleAddPhoto(preset.url)}
-                            disabled={isAdded}
-                            activeOpacity={0.75}
-                          >
-                            <Image
-                              source={{ uri: preset.url }}
-                              style={styles.presetImage}
-                            />
-                            <View style={styles.presetTitleOverlay}>
-                              <Text
-                                style={styles.presetTitleText}
-                                numberOfLines={1}
-                              >
-                                {isAdded ? "✓ Added" : preset.title}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
+                      <TouchableOpacity
+                        style={styles.uploadOptionBtn}
+                        onPress={() => handlePickAndUploadPhoto(true)}
+                        disabled={isUploadingPhoto}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.uploadOptionIconCircle}>
+                          <CameraIcon size={16} color="#09090b" />
+                        </View>
+                        <View style={styles.uploadOptionInfo}>
+                          <Text style={styles.uploadOptionTitle}>Take Photo</Text>
+                          <Text style={styles.uploadOptionSub}>Capture with your camera</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isUploadingPhoto && (
+                      <View style={styles.uploadProgressRow}>
+                        <ActivityIndicator size="small" color="#09090b" />
+                        <Text style={styles.uploadProgressText}>Uploading to Cloudinary...</Text>
+                      </View>
+                    )}
+
+                    <Text style={styles.pickerSubheading}>
+                      Or paste direct image URL:
+                    </Text>
 
                     {/* Custom URL Input */}
                     <View style={styles.customPhotoRow}>
@@ -536,16 +575,11 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
             {/* Submit Action */}
             <TouchableOpacity
-              style={[
-                styles.publishBtn,
-                isLimitReached && styles.publishBtnUpgrade,
-              ]}
+              style={styles.publishBtn}
               onPress={handlePublish}
               activeOpacity={0.88}
             >
-              <Text style={styles.publishBtnText}>
-                {isLimitReached ? "Unlock to Publish ($1.99 / Pro)" : "Publish Journey Post"}
-              </Text>
+              <Text style={styles.publishBtnText}>Publish Journey Post</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -627,6 +661,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+    overflow: "hidden",
+  },
+  authorAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
   },
   avatarText: {
     color: "#ffffff",
@@ -640,6 +680,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#09090b",
+  },
+  authorSub: {
+    fontSize: 12,
+    color: "#71717a",
   },
   tierPill: {
     flexDirection: "row",
@@ -909,18 +953,88 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  attachBtnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  directUploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#09090b",
+  },
+  directUploadBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
   addPhotoToggleBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: "#f4f4f5",
     alignSelf: "flex-start",
-    marginBottom: 6,
   },
   addPhotoToggleText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#09090b",
+  },
+  uploadOptionsBox: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  uploadOptionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    padding: 10,
+    borderRadius: 10,
+  },
+  uploadOptionIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  uploadOptionInfo: {
+    flex: 1,
+  },
+  uploadOptionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  uploadOptionSub: {
+    fontSize: 10,
+    color: "#71717a",
+  },
+  uploadProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f4f4f5",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  uploadProgressText: {
+    fontSize: 11,
+    color: "#09090b",
+    fontWeight: "600",
   },
   maxPhotoNotice: {
     paddingVertical: 6,

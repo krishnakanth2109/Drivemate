@@ -50,7 +50,7 @@ const RegisterScreen: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
-  const [devOtpCode, setDevOtpCode] = useState("123456");
+  const [devOtpCode, setDevOtpCode] = useState("");
   const [resendTimer, setResendTimer] = useState(60);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -359,7 +359,7 @@ const RegisterScreen: React.FC = () => {
                       styles.input,
                       focusedField === "name" && styles.inputFocused,
                     ]}
-                    placeholder="e.g. Alex Morgan"
+                    placeholder="Enter your full name"
                     placeholderTextColor="#a1a1aa"
                     value={fullName}
                     onChangeText={setFullName}
@@ -460,7 +460,7 @@ const RegisterScreen: React.FC = () => {
                     <Text style={styles.prefixText}>@</Text>
                     <TextInput
                       style={styles.prefixInput}
-                      placeholder="alex_m"
+                      placeholder="username"
                       placeholderTextColor="#a1a1aa"
                       value={username}
                       onChangeText={setUsername}
@@ -643,19 +643,21 @@ const RegisterScreen: React.FC = () => {
                 </Text>
 
                 {/* 1-Tap Dev Quick-Fill Pill */}
-                <TouchableOpacity
-                  style={styles.devOtpPill}
-                  onPress={() => setOtp(devOtpCode || "123456")}
-                  activeOpacity={0.75}
-                >
-                  <SparklesIcon size={12} color="#09090b" />
-                  <Text style={styles.devOtpText}>
-                    Quick-Fill Test Code:{" "}
-                    <Text style={{ fontWeight: "800", color: "#09090b" }}>
-                      {devOtpCode || "123456"}
+                {Boolean(devOtpCode) && (
+                  <TouchableOpacity
+                    style={styles.devOtpPill}
+                    onPress={() => setOtp(devOtpCode)}
+                    activeOpacity={0.75}
+                  >
+                    <SparklesIcon size={12} color="#09090b" />
+                    <Text style={styles.devOtpText}>
+                      Code:{" "}
+                      <Text style={{ fontWeight: "800", color: "#09090b" }}>
+                        {devOtpCode}
+                      </Text>
                     </Text>
-                  </Text>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
 
                 {/* Reliable Native OTP Input with Visual 6-Cell Overlay */}
                 <View style={styles.otpInputContainer}>

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,9 +15,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/AppNavigator";
 import BottomBar, { TabKey } from "../../components/BottomBar";
 import CreatePostModal, { PostItem } from "../../components/CreatePostModal";
-import PaymentModal from "../../components/PaymentModal";
-import { PlusIcon, SparklesIcon } from "../../components/Icons";
-import { authAPI, postsAPI, billingAPI } from "../../services/api";
+import { PlusIcon } from "../../components/Icons";
+import { authAPI, postsAPI } from "../../services/api";
 import { getUserProfile } from "../../services/storage";
 import { logScreenView, logPostCreation } from "../../services/analytics";
 
@@ -32,21 +32,17 @@ const Dashboard: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [currentTab, setCurrentTab] = useState<TabKey>("home");
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // User Profile & Free Tier Post Limits (2 free posts)
-  const MAX_FREE_POSTS = 2;
-  const [userName, setUserName] = useState("Drivemate Driver");
+  // User Profile
+  const [userName, setUserName] = useState("Driver");
   const [userEmail, setUserEmail] = useState("");
-  const [freePostsUsed, setFreePostsUsed] = useState(0);
-  const [singlePasses, setSinglePasses] = useState(0);
-  const [isProUser, setIsProUser] = useState(false);
+  const [userAvatar, setUserAvatar] = useState<string | undefined>(undefined);
 
   // Community posts fetched live from MongoDB backend
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [userCreatedCount, setUserCreatedCount] = useState(0);
 
-  // Synchronize user profile, community posts, and billing quota on mount
+  // Synchronize user profile and community posts on mount
   useEffect(() => {
     let isMounted = true;
     logScreenView("dashboard");
@@ -57,10 +53,21 @@ const Dashboard: React.FC = () => {
       if (stored && isMounted) {
         if (stored.fullName) setUserName(stored.fullName);
         if (stored.email) setUserEmail(stored.email);
-        if (typeof stored.freePostsUsed === "number") setFreePostsUsed(stored.freePostsUsed);
-        if (typeof stored.singlePasses === "number") setSinglePasses(stored.singlePasses);
-        if (typeof stored.isProUser === "boolean") setIsProUser(stored.isProUser);
+        if (stored.profilePicture || stored.photoUrl) {
+          setUserAvatar(stored.profilePicture || stored.photoUrl);
+        }
       }
+
+      try {
+        const profileRes = await authAPI.getProfile();
+        if (profileRes.success && profileRes.user && isMounted) {
+          if (profileRes.user.fullName) setUserName(profileRes.user.fullName);
+          if (profileRes.user.email) setUserEmail(profileRes.user.email);
+          if (profileRes.user.profilePicture || profileRes.user.photoUrl) {
+            setUserAvatar(profileRes.user.profilePicture || profileRes.user.photoUrl);
+          }
+        }
+      } catch {}
 
       // 2. Fetch fresh community posts from MongoDB backend
       try {
@@ -70,21 +77,8 @@ const Dashboard: React.FC = () => {
         }
       } catch {}
 
-      // 3. Fetch latest billing quota status from backend
-      try {
-        const billingRes = await billingAPI.getStatus();
-        if (billingRes.success && billingRes.billing && isMounted) {
-          setIsProUser(!!billingRes.billing.isProUser);
-          setFreePostsUsed(billingRes.billing.freePostsUsed || 0);
-          setSinglePasses(billingRes.billing.singlePasses || 0);
-        }
-      } catch {}
-
       console.log("📊 [Dashboard Data Loaded]", {
         user: { fullName: stored?.fullName, email: stored?.email },
-        isProUser: stored?.isProUser,
-        freePostsUsed: stored?.freePostsUsed,
-        singlePasses: stored?.singlePasses,
       });
     }
 
@@ -116,15 +110,8 @@ const Dashboard: React.FC = () => {
     } catch {}
   };
 
-  const canPost = isProUser || singlePasses > 0 || freePostsUsed < MAX_FREE_POSTS;
-
   const handleOpenCreatePost = () => {
-    console.log("✍️ [Dashboard] Opening create post dialog. canPost:", canPost);
-    if (!canPost) {
-      setIsPaymentModalOpen(true);
-    } else {
-      setIsCreatePostOpen(true);
-    }
+    setIsCreatePostOpen(true);
   };
 
   const handlePublishPost = async (postData: {
@@ -143,27 +130,11 @@ const Dashboard: React.FC = () => {
     try {
       const res = await postsAPI.createPost(postData);
 
-      if (res.requirePayment) {
-        setIsCreatePostOpen(false);
-        setIsPaymentModalOpen(true);
-        Alert.alert(
-          "Free Limit Reached",
-          "You have used your 2 free community posts. Purchase a Single Pass or upgrade to Pro to publish."
-        );
-        return;
-      }
-
       if (res.success && res.post) {
         setPosts((prev) => [res.post, ...prev]);
         setUserCreatedCount((prev) => prev + 1);
 
         logPostCreation(postData.tag, postData.fromCity, postData.toCity);
-
-        if (res.quota) {
-          setFreePostsUsed(res.quota.freePostsUsed);
-          setSinglePasses(res.quota.singlePasses);
-          setIsProUser(res.quota.isProUser);
-        }
       } else {
         // Fallback local update if network is unreachable
         const fallbackPost: PostItem = {
@@ -187,13 +158,6 @@ const Dashboard: React.FC = () => {
         };
         setPosts([fallbackPost, ...posts]);
         setUserCreatedCount((prev) => prev + 1);
-        if (!isProUser) {
-          if (freePostsUsed < MAX_FREE_POSTS) {
-            setFreePostsUsed((prev) => prev + 1);
-          } else if (singlePasses > 0) {
-            setSinglePasses((prev) => Math.max(0, prev - 1));
-          }
-        }
       }
     } catch (err) {
       // Local fallback
@@ -219,37 +183,6 @@ const Dashboard: React.FC = () => {
       setPosts([fallbackPost, ...posts]);
       setUserCreatedCount((prev) => prev + 1);
     }
-  };
-
-  const handlePaymentSuccess = async (plan: "single" | "pro") => {
-    try {
-      if (plan === "pro") {
-        const res = await billingAPI.upgradePro();
-        if (res.success && res.billing) {
-          setIsProUser(true);
-        } else {
-          setIsProUser(true);
-        }
-      } else {
-        const res = await billingAPI.buySinglePass();
-        if (res.success && res.billing) {
-          setSinglePasses(res.billing.singlePasses);
-        } else {
-          setSinglePasses((prev) => prev + 1);
-        }
-      }
-    } catch {
-      if (plan === "pro") {
-        setIsProUser(true);
-      } else {
-        setSinglePasses((prev) => prev + 1);
-      }
-    }
-
-    // Re-open post modal for seamless posting experience
-    setTimeout(() => {
-      setIsCreatePostOpen(true);
-    }, 500);
   };
 
   const handleSignOut = async () => {
@@ -279,22 +212,6 @@ const Dashboard: React.FC = () => {
         </View>
 
         <View style={styles.headerRight}>
-          {/* Post Limit or Pro Badge */}
-          <TouchableOpacity
-            style={styles.tierPill}
-            onPress={() => setIsPaymentModalOpen(true)}
-            activeOpacity={0.7}
-          >
-            <SparklesIcon size={12} color="#09090b" />
-            <Text style={[styles.tierPillText, isProUser && styles.tierProPillText]}>
-              {isProUser
-                ? "PRO"
-                : singlePasses > 0
-                ? `${singlePasses} PASS`
-                : `${Math.max(0, MAX_FREE_POSTS - freePostsUsed)} FREE`}
-            </Text>
-          </TouchableOpacity>
-
           {/* Quick Create Post Header Button */}
           <TouchableOpacity
             style={styles.headerActionBtn}
@@ -310,9 +227,13 @@ const Dashboard: React.FC = () => {
             onPress={() => setCurrentTab("profile")}
             activeOpacity={0.8}
           >
-            <Text style={styles.avatarButtonText}>
-              {userName.charAt(0).toUpperCase()}
-            </Text>
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.headerAvatarImg} />
+            ) : (
+              <Text style={styles.avatarButtonText}>
+                {userName.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -324,13 +245,9 @@ const Dashboard: React.FC = () => {
             posts={posts}
             onToggleLike={handleToggleLike}
             onOpenCreatePost={handleOpenCreatePost}
-            onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
             onNavigateTab={(tab) => setCurrentTab(tab)}
-            freePostsUsed={freePostsUsed}
-            maxFreePosts={MAX_FREE_POSTS}
-            singlePasses={singlePasses}
-            isProUser={isProUser}
             userName={userName}
+            userAvatar={userAvatar}
           />
         )}
         {currentTab === "messaging" && <MessagingTab />}
@@ -338,15 +255,11 @@ const Dashboard: React.FC = () => {
         {currentTab === "services" && <ServicesTab />}
         {currentTab === "profile" && (
           <ProfileTab
-            onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
             onSignOut={handleSignOut}
-            freePostsUsed={freePostsUsed}
-            maxFreePosts={MAX_FREE_POSTS}
-            singlePasses={singlePasses}
-            isProUser={isProUser}
             totalPostsCreated={userCreatedCount}
             userName={userName}
             userEmail={userEmail}
+            userAvatar={userAvatar}
           />
         )}
       </View>
@@ -355,8 +268,8 @@ const Dashboard: React.FC = () => {
       <BottomBar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
-        unreadMessagesCount={2}
-        hasNewUpdates={true}
+        unreadMessagesCount={0}
+        hasNewUpdates={false}
       />
 
       {/* Create Post Modal */}
@@ -364,23 +277,8 @@ const Dashboard: React.FC = () => {
         visible={isCreatePostOpen}
         onClose={() => setIsCreatePostOpen(false)}
         onSubmitPost={handlePublishPost}
-        onOpenPaymentModal={() => {
-          setIsCreatePostOpen(false);
-          setIsPaymentModalOpen(true);
-        }}
-        freePostsUsed={freePostsUsed}
-        maxFreePosts={MAX_FREE_POSTS}
-        singlePasses={singlePasses}
-        isProUser={isProUser}
         userName={userName}
-      />
-
-      {/* Payment / Upgrade Modal */}
-      <PaymentModal
-        visible={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        onPaymentSuccess={handlePaymentSuccess}
-        freePostsUsed={freePostsUsed}
+        userAvatar={userAvatar}
       />
     </SafeAreaView>
   );
@@ -478,6 +376,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#09090b",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 10,
   },
   avatarButtonText: {
     color: "#ffffff",
