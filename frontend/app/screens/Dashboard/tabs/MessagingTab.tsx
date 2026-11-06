@@ -14,6 +14,7 @@ import {
   Image,
   Modal,
   Linking,
+  Vibration,
 } from "react-native";
 import {
   MessageIcon,
@@ -827,17 +828,23 @@ const MessagingTab: React.FC<MessagingTabProps> = ({
             returnKeyType="send"
           />
 
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !inputText.trim() && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.sendButtonText}>Send</Text>
-          </TouchableOpacity>
+          {inputText.trim() ? (
+            <TouchableOpacity
+              style={styles.sendButton}
+              onPress={handleSendMessage}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.micInputBtn}
+              onPress={() => setIsVoiceModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <MicIcon size={18} color="#ffffff" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Photo Selection Modal */}
@@ -1049,7 +1056,23 @@ const MessagingTab: React.FC<MessagingTabProps> = ({
               <View style={styles.voiceRecorderArea}>
                 <TouchableOpacity
                   style={[styles.bigMicButton, isRecording && styles.bigMicButtonRecording]}
-                  onPress={() => setIsRecording((prev) => !prev)}
+                  onPress={() => {
+                    if (isRecording) {
+                      const duration = `0:${recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}`;
+                      handleSendRichMessage({
+                        msgType: "voice",
+                        fileMeta: {
+                          duration,
+                          fileName: "Live_Road_Dispatch.m4a",
+                          fileSize: "96 KB",
+                        },
+                        text: `🎙️ Voice Memo (${duration})`,
+                      });
+                    } else {
+                      setIsRecording(true);
+                      Vibration.vibrate(25);
+                    }
+                  }}
                   activeOpacity={0.85}
                 >
                   <MicIcon size={28} color="#ffffff" />
@@ -2118,6 +2141,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#09090b",
     paddingHorizontal: 16,
     borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micInputBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#09090b",
     alignItems: "center",
     justifyContent: "center",
   },

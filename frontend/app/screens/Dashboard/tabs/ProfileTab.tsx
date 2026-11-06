@@ -27,7 +27,10 @@ import {
   UserIcon,
   PlusIcon,
   TrashIcon,
+  PlayIcon,
 } from "../../../components/Icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import BallGame from "../../../components/BallGame";
 import { authAPI, vehiclesAPI, postsAPI } from "../../../services/api";
 import { getUserProfile, StoredUserProfile } from "../../../services/storage";
 
@@ -57,6 +60,18 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isGameOpen, setIsGameOpen] = useState<boolean>(false);
+  const [highScore, setHighScore] = useState<number>(0);
+
+  useEffect(() => {
+    async function loadHighScore() {
+      try {
+        const val = await AsyncStorage.getItem("@drivemate_ball_game_high_score");
+        if (val) setHighScore(parseInt(val, 10) || 0);
+      } catch {}
+    }
+    loadHighScore();
+  }, [isGameOpen]);
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -147,6 +162,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const primaryVehicle = vehicles.find((v) => v.isPrimary) || vehicles[0] || null;
 
   return (
+    <>
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.container}
@@ -265,6 +281,44 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </View>
         )}
       </TouchableOpacity>
+
+      {/* Featured Mini Game Banner */}
+      <View style={styles.gameCard}>
+        <View style={styles.gameCardTop}>
+          <View style={styles.gameBadge}>
+            <SparklesIcon size={12} color="#ffffff" />
+            <Text style={styles.gameBadgeText}>ARCADE MINI GAME</Text>
+          </View>
+          <View style={styles.gameScoreBadge}>
+            <Text style={styles.gameScoreBadgeText}>BEST: {highScore}</Text>
+          </View>
+        </View>
+
+        <View style={styles.gameContent}>
+          <View style={styles.gameVisualWrap}>
+            <View style={styles.gameVisualTopGoal} />
+            <View style={styles.gameVisualObstacle1} />
+            <View style={styles.gameVisualObstacle2} />
+            <View style={styles.gameVisualBall} />
+          </View>
+
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameTitle}>Rising Ball Challenge</Text>
+            <Text style={styles.gameDesc}>
+              Tap screen to hop the ball to the top green zone! Score points, collect gems & shields, dodge obstacle bars, and don't get OUT!
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.playGameBtn}
+          onPress={() => setIsGameOpen(true)}
+          activeOpacity={0.85}
+        >
+          <PlayIcon size={16} color="#09090b" />
+          <Text style={styles.playGameBtnText}>PLAY ARCADE GAME</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Account Navigation Menu */}
       <Text style={styles.menuSectionHeader}>Account & Services</Text>
@@ -408,6 +462,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         </TouchableOpacity>
       </View>
     </ScrollView>
+
+    {/* Rising Ball Arcade Modal */}
+    <BallGame visible={isGameOpen} onClose={() => setIsGameOpen(false)} />
+  </>
   );
 };
 
@@ -775,5 +833,126 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 13,
     fontWeight: "700",
+  },
+  gameCard: {
+    backgroundColor: "#18181b",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: "#27272a",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  gameCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  gameBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#10b981",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  gameBadgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  gameScoreBadge: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  gameScoreBadgeText: {
+    color: "#f59e0b",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  gameContent: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  gameVisualWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 14,
+    backgroundColor: "#27272a",
+    borderWidth: 1,
+    borderColor: "#3f3f46",
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  gameVisualTopGoal: {
+    width: 44,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10b981",
+  },
+  gameVisualObstacle1: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#f59e0b",
+  },
+  gameVisualObstacle2: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ef4444",
+  },
+  gameVisualBall: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#38bdf8",
+    borderWidth: 1.5,
+    borderColor: "#ffffff",
+  },
+  gameInfo: {
+    flex: 1,
+  },
+  gameTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 3,
+    letterSpacing: -0.2,
+  },
+  gameDesc: {
+    color: "#a1a1aa",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  playGameBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#ffffff",
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  playGameBtnText: {
+    color: "#09090b",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
 });

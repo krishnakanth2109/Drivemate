@@ -436,6 +436,16 @@ export const postsAPI = {
       requiresAuth: true,
     });
   },
+
+  /**
+   * Delete a post
+   */
+  async deletePost(postId: string) {
+    return await request<{ success: boolean; message?: string }>(`/posts/${postId}`, {
+      method: "DELETE",
+      requiresAuth: true,
+    });
+  },
 };
 
 // ================= VEHICLES API =================

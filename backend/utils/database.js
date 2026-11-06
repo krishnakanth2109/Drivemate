@@ -273,12 +273,47 @@ class DataStore {
       }
     }
 
-    // 2. Persist in AsyncStorage
-    const currentPosts = await this.getAllPosts();
-    const updated = [newPost, ...currentPosts];
-    await asyncStorage.setItem('community_posts', updated);
+    // 2. Persist in AsyncStorage cache (safely non-blocking)
+    try {
+      const currentPosts = await this.getAllPosts();
+      const updated = [newPost, ...(Array.isArray(currentPosts) ? currentPosts : [])];
+      await asyncStorage.setItem('community_posts', updated).catch(() => {});
+    } catch (storageErr) {
+      console.warn(`[AsyncStorage] createPost cache warning: ${storageErr.message}`);
+    }
 
     return newPost;
+  }
+
+  async deletePost(postId, userId) {
+    let deleted = false;
+
+    // 1. Delete from MongoDB Atlas
+    if (this.isMongoReady()) {
+      try {
+        const query = userId ? { id: postId, userId } : { id: postId };
+        const result = await Post.deleteOne(query);
+        if (result.deletedCount > 0) {
+          deleted = true;
+        }
+      } catch (err) {
+        console.warn(`[MongoDB] deletePost error: ${err.message}`);
+      }
+    }
+
+    // 2. Remove from AsyncStorage cache
+    try {
+      const posts = await this.getAllPosts();
+      const filtered = (Array.isArray(posts) ? posts : []).filter((p) => p.id !== postId);
+      if (filtered.length !== posts.length) {
+        deleted = true;
+      }
+      await asyncStorage.setItem('community_posts', filtered).catch(() => {});
+    } catch (storageErr) {
+      console.warn(`[AsyncStorage] deletePost error: ${storageErr.message}`);
+    }
+
+    return deleted;
   }
 
   async toggleLikePost(postId, userId) {

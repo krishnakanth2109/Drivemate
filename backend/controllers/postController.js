@@ -30,18 +30,25 @@ export const getPosts = async (req, res) => {
 
 export const createPost = async (req, res) => {
   const user = req.user;
-  const lockKey = `race:post:${user.uid}`;
-
-  // Acquire Redis Distributed Lock to prevent race condition on quota
-  const acquired = await acquireRaceLock(lockKey, 4);
-  if (!acquired) {
-    return res.status(429).json({
+  if (!user || !user.uid) {
+    return res.status(401).json({
       success: false,
-      error: 'Concurrent post creation in progress. Please wait a moment.',
+      error: 'Authentication required to publish post.',
     });
   }
 
+  const lockKey = `race:post:${user.uid}`;
+  let lockAcquired = false;
+
   try {
+    lockAcquired = await acquireRaceLock(lockKey, 4);
+    if (!lockAcquired) {
+      return res.status(429).json({
+        success: false,
+        error: 'Concurrent post creation in progress. Please wait a moment.',
+      });
+    }
+
     const {
       content,
       fromCity,
@@ -67,19 +74,19 @@ export const createPost = async (req, res) => {
 
     // Create the post with ride-sharing / journey details
     const postPayload = {
-      author: freshUser.fullName || 'Drivemate Driver',
-      authorTag: freshUser.username ? `@${freshUser.username}` : '@driver',
+      author: freshUser.fullName || req.body.author || 'Drivemate Driver',
+      authorTag: freshUser.username ? `@${freshUser.username}` : (req.body.authorTag || '@driver'),
       authorAvatar: req.body.authorAvatar || freshUser.profilePicture || freshUser.photoUrl || '',
       userId: freshUser.uid,
       content: content.trim(),
-      fromCity: fromCity ? fromCity.trim() : undefined,
-      toCity: toCity ? toCity.trim() : undefined,
-      departureTime: departureTime ? departureTime.trim() : undefined,
-      availableSeats: availableSeats ? Number(availableSeats) : 0,
-      pricePerSeat: pricePerSeat ? pricePerSeat.trim() : undefined,
-      link: link && link.trim() ? link.trim() : undefined,
-      linkTitle: linkTitle && linkTitle.trim() ? linkTitle.trim() : undefined,
-      tag: tag && tag.trim() ? tag.trim() : '#Carpool',
+      fromCity: fromCity && typeof fromCity === 'string' ? fromCity.trim() : undefined,
+      toCity: toCity && typeof toCity === 'string' ? toCity.trim() : undefined,
+      departureTime: departureTime && typeof departureTime === 'string' ? departureTime.trim() : undefined,
+      availableSeats: availableSeats ? Math.max(0, parseInt(availableSeats, 10) || 0) : 0,
+      pricePerSeat: pricePerSeat && typeof pricePerSeat === 'string' ? pricePerSeat.trim() : undefined,
+      link: link && typeof link === 'string' && link.trim() ? link.trim() : undefined,
+      linkTitle: linkTitle && typeof linkTitle === 'string' && linkTitle.trim() ? linkTitle.trim() : undefined,
+      tag: tag && typeof tag === 'string' && tag.trim() ? tag.trim() : '#Carpool',
       photos: Array.isArray(photos) ? photos.slice(0, 3) : [],
       timeAgo: 'Just now',
       likes: 0,
@@ -104,13 +111,56 @@ export const createPost = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('[PostController.createPost] Error:', error);
+    console.error('[PostController.createPost] Error:', error.message, error.stack);
     return res.status(500).json({
       success: false,
-      error: 'Failed to publish post.',
+      error: error.message || 'Failed to publish post.',
     });
   } finally {
-    await releaseRaceLock(lockKey);
+    if (lockAcquired) {
+      await releaseRaceLock(lockKey).catch(() => {});
+    }
+  }
+};
+
+export const deletePost = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const user = req.user;
+
+    if (!postId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Post ID is required.',
+      });
+    }
+
+    if (!user || !user.uid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required to delete post.',
+      });
+    }
+
+    const deleted = await dataStore.deletePost(postId, user.uid);
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found or unauthorized to delete.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Post deleted successfully.',
+      postId,
+    });
+  } catch (error) {
+    console.error('[PostController.deletePost] Error:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete post.',
+    });
   }
 };
 

@@ -25,6 +25,11 @@ declare module "*.gif" {
     export default value;
 }
 
+declare module "*.mp4" {
+    const value: any;
+    export default value;
+}
+
 declare module "*.css" {
     const content: any;
     export default content;

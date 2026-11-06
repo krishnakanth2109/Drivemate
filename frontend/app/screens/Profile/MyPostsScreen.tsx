@@ -75,8 +75,21 @@ const MyPostsScreen: React.FC = () => {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
+          const previous = [...myPosts];
           setMyPosts((prev) => prev.filter((p) => p.id !== id));
+          try {
+            const res = await postsAPI.deletePost(id);
+            if (!res.success) {
+              setMyPosts(previous);
+              Alert.alert("Deletion Failed", res.error || "Unable to delete post at this time.");
+            } else {
+              Alert.alert("Post Deleted", "Your post has been permanently removed from the community feed.");
+            }
+          } catch (err: any) {
+            setMyPosts(previous);
+            Alert.alert("Error", err.message || "Failed to communicate with server.");
+          }
         },
       },
     ]);

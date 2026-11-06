@@ -42,15 +42,17 @@ class BackendAsyncStorage {
   }
 
   async saveToFile() {
-    this.writePromise = this.writePromise.then(async () => {
-      try {
-        await fs.mkdir(DATA_DIR, { recursive: true });
-        const obj = Object.fromEntries(this.memoryCache.entries());
-        await fs.writeFile(STORAGE_FILE, JSON.stringify(obj, null, 2), 'utf8');
-      } catch (err) {
-        console.error('[AsyncStorage Backend] Failed to persist data to disk:', err.message);
-      }
-    });
+    this.writePromise = this.writePromise
+      .catch(() => {})
+      .then(async () => {
+        try {
+          await fs.mkdir(DATA_DIR, { recursive: true });
+          const obj = Object.fromEntries(this.memoryCache.entries());
+          await fs.writeFile(STORAGE_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        } catch (err) {
+          console.warn('[AsyncStorage Backend] Disk persist note:', err.message);
+        }
+      });
     return this.writePromise;
   }
 

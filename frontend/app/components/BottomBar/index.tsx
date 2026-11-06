@@ -5,11 +5,10 @@ import {
   HomeIcon,
   MessageIcon,
   BellIcon,
-  WrenchIcon,
   UserIcon,
 } from "../Icons";
 
-export type TabKey = "home" | "messaging" | "updates" | "services" | "profile";
+export type TabKey = "home" | "messaging" | "updates" | "profile";
 
 interface BottomBarProps {
   currentTab: TabKey;
@@ -55,13 +54,6 @@ const BottomBar: React.FC<BottomBarProps> = ({
         <BellIcon size={20} color={active ? "#09090b" : "#a1a1aa"} />
       ),
       badge: hasNewUpdates,
-    },
-    {
-      key: "services",
-      label: "Services",
-      renderIcon: (active) => (
-        <WrenchIcon size={20} color={active ? "#09090b" : "#a1a1aa"} />
-      ),
     },
     {
       key: "profile",

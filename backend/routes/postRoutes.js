@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPosts, createPost, toggleLike } from '../controllers/postController.js';
+import { getPosts, createPost, toggleLike, deletePost } from '../controllers/postController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = Router();
@@ -13,11 +13,14 @@ router.get('/', (req, res, next) => {
   return next();
 }, getPosts);
 
-// Creating post strictly requires authentication & validates 2-free-post quota
+// Creating post strictly requires authentication
 router.post('/', requireAuth, createPost);
 
 // Liking post requires authentication
 router.post('/:postId/like', requireAuth, toggleLike);
+
+// Deleting post requires authentication
+router.delete('/:postId', requireAuth, deletePost);
 
 export default router;
 

@@ -23,7 +23,6 @@ import { logScreenView, logPostCreation } from "../../services/analytics";
 import HomeTab from "./tabs/HomeTab";
 import MessagingTab from "./tabs/MessagingTab";
 import UpdatesTab from "./tabs/UpdatesTab";
-import ServicesTab from "./tabs/ServicesTab";
 import ProfileTab from "./tabs/ProfileTab";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Dashboard">;
@@ -140,6 +139,33 @@ const Dashboard: React.FC = () => {
     } catch {}
   };
 
+  const handleDeletePost = (postId: string) => {
+    Alert.alert("Delete Post", "Are you sure you want to permanently delete this post?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const previous = [...posts];
+          setPosts((prev) => prev.filter((p) => p.id !== postId));
+          try {
+            const res = await postsAPI.deletePost(postId);
+            if (!res.success) {
+              setPosts(previous);
+              Alert.alert("Deletion Failed", res.error || "Unable to delete post at this time.");
+            } else {
+              setUserCreatedCount((prev) => Math.max(0, prev - 1));
+              Alert.alert("Post Deleted", "Your post has been removed from the community feed.");
+            }
+          } catch (err: any) {
+            setPosts(previous);
+            Alert.alert("Error", err.message || "Failed to communicate with server.");
+          }
+        },
+      },
+    ]);
+  };
+
   const handleOpenCreatePost = () => {
     setIsCreatePostOpen(true);
   };
@@ -242,6 +268,7 @@ const Dashboard: React.FC = () => {
             posts={posts}
             onToggleLike={handleToggleLike}
             onOpenCreatePost={handleOpenCreatePost}
+            onDeletePost={handleDeletePost}
             onNavigateTab={(tab, mode, roomId) => {
               if (mode) setMessagingInitialMode(mode);
               if (roomId) setMessagingInitialRoomId(roomId);
@@ -259,7 +286,6 @@ const Dashboard: React.FC = () => {
           />
         )}
         {currentTab === "updates" && <UpdatesTab />}
-        {currentTab === "services" && <ServicesTab />}
         {currentTab === "profile" && (
           <ProfileTab
             onSignOut={handleSignOut}

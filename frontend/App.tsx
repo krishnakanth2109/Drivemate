@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
@@ -7,10 +7,11 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import AppNavigator from "./app/navigation/AppNavigator";
+import StartingVideoSplash from "./app/components/StartingVideoSplash";
 import "./app/globals.css";
 
-// Prevent native splash screen from hiding before initial render
-SplashScreen.preventAutoHideAsync().catch(() => {});
+// Hide native splash immediately so only the startup video plays from the very start
+SplashScreen.hideAsync().catch(() => {});
 
 const fontAssets = {
   "SF-bold": require("./assets/fonts/SanFranciscoProText/SFProText-Bold.ttf"),
@@ -26,33 +27,26 @@ const fontAssets = {
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
-  const splashHiddenRef = useRef(false);
-
-  const hideSplash = useCallback(async () => {
-    if (splashHiddenRef.current) return;
-    splashHiddenRef.current = true;
-    try {
-      await SplashScreen.hideAsync();
-    } catch {}
-  }, []);
+  const [isVideoDone, setIsVideoDone] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      hideSplash();
-    }
-  }, [fontsLoaded, fontError, hideSplash]);
-
-  if (!fontsLoaded && !fontError) {
-    return null;
-  }
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <NavigationContainer onReady={hideSplash}>
-          <AppNavigator />
-        </NavigationContainer>
+        <StatusBar hidden={!isVideoDone} style={isVideoDone ? "dark" : "light"} />
+        {fontsLoaded || fontError ? (
+          <NavigationContainer>
+            <AppNavigator />
+          </NavigationContainer>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000000" }]} />
+        )}
+        {!isVideoDone && (
+          <StartingVideoSplash onFinish={() => setIsVideoDone(true)} />
+        )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

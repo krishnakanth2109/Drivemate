@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Share,
 } from "react-native";
 import {
   PlusIcon,
@@ -22,6 +23,7 @@ import {
   CloseIcon,
   UserIcon,
   CheckCircleIcon,
+  TrashIcon,
 } from "../../../components/Icons";
 import { PostItem } from "../../../components/CreatePostModal";
 import { messagesAPI, DriverProfile } from "../../../services/api";
@@ -30,8 +32,9 @@ interface HomeTabProps {
   posts: PostItem[];
   onToggleLike: (id: string) => void;
   onOpenCreatePost: () => void;
+  onDeletePost?: (id: string) => void;
   onNavigateTab?: (
-    tab: "home" | "messaging" | "updates" | "services" | "profile",
+    tab: "home" | "messaging" | "updates" | "profile",
     mode?: "chats" | "requests" | "discover",
     roomId?: string
   ) => void;
@@ -44,6 +47,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
   posts,
   onToggleLike,
   onOpenCreatePost,
+  onDeletePost,
   onNavigateTab,
   userName = "Driver",
   userId,
@@ -336,8 +340,27 @@ const HomeTab: React.FC<HomeTabProps> = ({
     });
   };
 
-  const handleShare = (post: PostItem) => {
-    Alert.alert("Share Post", `Sharing: "${post.content.slice(0, 50)}..."`);
+  const handleShare = async (post: PostItem) => {
+    try {
+      let message = `🚗 Drivemate Update from ${post.author} (${post.authorTag}):\n\n"${post.content}"`;
+      if (post.fromCity && post.toCity) {
+        message += `\n\n📍 Route: ${post.fromCity} ➔ ${post.toCity}`;
+        if (post.departureTime) message += `\n🕒 Departure: ${post.departureTime}`;
+        if (post.availableSeats) message += `\n👥 Available Seats: ${post.availableSeats}`;
+        if (post.pricePerSeat) message += `\n🏷️ Rate: ${post.pricePerSeat}`;
+      }
+      if (post.link) {
+        message += `\n\n🔗 ${post.link}`;
+      }
+      message += `\n\nShared via Drivemate Community`;
+      await Share.share({
+        message,
+        title: `Drivemate Post by ${post.author}`,
+        url: post.link || undefined,
+      });
+    } catch (err: any) {
+      console.warn("Share dialog closed or error:", err.message);
+    }
   };
 
   return (
@@ -637,6 +660,18 @@ const HomeTab: React.FC<HomeTabProps> = ({
                     <ShareIcon size={18} color="#71717a" />
                     <Text style={styles.actionText}>Share</Text>
                   </TouchableOpacity>
+
+                  {isPostSelf && onDeletePost && (
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => onDeletePost(post.id)}
+                    >
+                      <TrashIcon size={17} color="#ef4444" />
+                      <Text style={[styles.actionText, { color: "#ef4444", fontWeight: "600" }]}>
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })()}
