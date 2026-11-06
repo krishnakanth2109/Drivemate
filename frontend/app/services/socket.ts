@@ -16,8 +16,9 @@ export function getSocket(): Socket {
     socket = io(socketUrl, {
       transports: ["websocket", "polling"],
       autoConnect: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 30, // 30 attempts to reliably connect while Render wakes from sleep
+      reconnectionDelay: 2000,
+      timeout: 60000, // 60s socket connection timeout matching API layer
     });
 
     socket.on("connect", () => {

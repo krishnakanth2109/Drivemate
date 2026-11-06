@@ -21,14 +21,20 @@ const getDevHost = (): string | null => {
   return null;
 };
 
-// Primary Production Render Backend URL
-const PRODUCTION_URL = "https://drivemate-fq3q.onrender.com/api";
+// Primary Production Render Backend URL (Free-tier sleeps when inactive, cold start ~50s)
+export const RENDER_API_URL = "https://drivemate-fq3q.onrender.com/api";
+
+// Localhost Development Backend URL
+export const LOCALHOST_API_URL = "http://localhost:5000/api";
+
+// 60-second request timeout to allow Render free tier service to wake up from sleep
+export const API_TIMEOUT_MS = 60000;
 
 // Build candidate base URLs in priority order for robust multi-device reachability
 const getCandidateBaseUrls = (): string[] => {
   const list: string[] = [];
 
-  // 1. Explicit .env variable if provided
+  // 1. Explicit .env variable if provided (EXPO_PUBLIC_API_URL)
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_SERVER_URL;
   if (envUrl && envUrl.trim().length > 0) {
     const trimmed = envUrl.trim().replace(/\/+$/, "");
@@ -38,28 +44,28 @@ const getCandidateBaseUrls = (): string[] => {
     }
   }
 
-  // 2. Primary Production Render URL
-  if (!list.includes(PRODUCTION_URL)) {
-    list.push(PRODUCTION_URL);
+  // 2. Production Render Cloud URL (Primary Deployment)
+  if (!list.includes(RENDER_API_URL)) {
+    list.push(RENDER_API_URL);
   }
 
-  // 3. Dev Host IP from Expo / Browser if available
+  // 3. Localhost Development URL (Port 5000)
+  if (!list.includes(LOCALHOST_API_URL)) {
+    list.push(LOCALHOST_API_URL);
+  }
+
+  // 4. Android Emulator alias for host localhost (10.0.2.2:5000)
+  if (Platform.OS === "android" && !list.includes("http://10.0.2.2:5000/api")) {
+    list.push("http://10.0.2.2:5000/api");
+  }
+
+  // 5. Dev Host IP from Expo / Browser if available
   const devHost = getDevHost();
   if (devHost && devHost !== "localhost" && !devHost.includes("127.0.0.1")) {
     const devUrl = `http://${devHost}:5000/api`;
     if (!list.includes(devUrl)) {
       list.push(devUrl);
     }
-  }
-
-  // 4. Android emulator special alias
-  if (Platform.OS === "android" && !list.includes("http://10.0.2.2:5000/api")) {
-    list.push("http://10.0.2.2:5000/api");
-  }
-
-  // 5. Standard localhost fallback
-  if (!list.includes("http://localhost:5000/api")) {
-    list.push("http://localhost:5000/api");
   }
 
   return list;
@@ -129,7 +135,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     const targetUrl = `${candidateBase}${cleanEndpoint}`;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
       const response = await fetch(targetUrl, {
         ...rest,
@@ -177,10 +183,10 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
   }
 
   if (lastError?.name === "AbortError") {
-    console.error(`💥 [API ⏱️ TIMEOUT] ${method} ${cleanEndpoint} timed out after 6000ms`);
+    console.error(`💥 [API ⏱️ TIMEOUT] ${method} ${cleanEndpoint} timed out after ${API_TIMEOUT_MS / 1000}s`);
     return {
       success: false,
-      error: "Network request timed out. Please check your internet connection.",
+      error: "Connection timed out after 60s. The Render cloud server may be waking up, please try again in a moment.",
     };
   }
 
