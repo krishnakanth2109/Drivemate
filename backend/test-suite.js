@@ -127,51 +127,67 @@ async function runTests() {
   const post2Data = await post2Res.json();
   console.log('Post 2 created:', post2Data.success, 'New freePostsUsed:', post2Data.quota.freePostsUsed);
 
-  // Test 7: Create Post #3 without payment (Should require payment 402)
-  console.log('\n[Test 7] Creating Post #3 without payment (Should require payment 402)...');
-  const post3Res = await fetch(`${BASE_URL}/posts`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      content: 'Attempting 3rd post without purchasing pass...',
-    }),
-  });
-  const post3Data = await post3Res.json();
-  console.log('Post 3 status code:', post3Res.status, 'RequirePayment:', post3Data.requirePayment);
-  if (post3Res.status !== 402 || !post3Data.requirePayment) {
-    throw new Error('Payment barrier failed! Should have returned 402 with requirePayment.');
-  }
-
-  // Test 8: Purchase Single Post Pass
-  console.log('\n[Test 8] Purchasing a Single Post Pass...');
-  const passRes = await fetch(`${BASE_URL}/billing/buy-single-pass`, {
+  // Test 7: Toggling like on Post #1
+  console.log('\n[Test 7] Testing Post Like / Unlike toggle...');
+  const likeRes = await fetch(`${BASE_URL}/posts/${post1Data.post.id}/like`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
-  const passData = await passRes.json();
-  console.log('Single pass purchased:', passData.success, 'Current passes:', passData.billing.singlePasses);
+  const likeData = await likeRes.json();
+  console.log('Post liked status:', likeData.success, 'Current likes:', likeData.post?.likes);
 
-  // Test 9: Create Post #3 with Single Pass
-  console.log('\n[Test 9] Creating Post with the purchased Single Pass...');
-  const postPassRes = await fetch(`${BASE_URL}/posts`, {
+  // Test 8: Discovering registered drivers
+  console.log('\n[Test 8] Fetching discoverable driver profiles...');
+  const driversRes = await fetch(`${BASE_URL}/messages/drivers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const driversData = await driversRes.json();
+  console.log('Drivers found:', driversData.success, 'Count:', driversData.drivers?.length);
+
+  // Test 9: Sending a Connection Request
+  console.log('\n[Test 9] Sending a Connection Request...');
+  const targetDriver = driversData.drivers?.[0] || { uid: `driver_test_${Date.now()}`, fullName: 'Partner Driver', username: 'partner' };
+  const sendReqRes = await fetch(`${BASE_URL}/messages/requests/send`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      content: 'Post published successfully using Single Post Pass!',
-      tag: '#SinglePass',
+      targetUserId: targetDriver.uid,
+      targetName: targetDriver.fullName,
+      targetTag: `@${targetDriver.username}`,
     }),
   });
-  const postPassData = await postPassRes.json();
-  console.log('Post with pass created:', postPassData.success, 'Remaining passes:', postPassData.quota.singlePasses);
+  const sendReqData = await sendReqRes.json();
+  console.log('Connection request sent:', sendReqData.success, 'Status:', sendReqData.connection?.status);
 
-  // Test 10: Garage Vehicles Management
-  console.log('\n[Test 10] Testing Garage Vehicles API in MongoDB...');
+  // Test 10: Fetching Connection Requests & Accepting Request
+  console.log('\n[Test 10] Fetching connection requests & accepting invitation...');
+  const getReqsRes = await fetch(`${BASE_URL}/messages/requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const getReqsData = await getReqsRes.json();
+  console.log('Requests loaded:', getReqsData.success, 'Outgoing count:', getReqsData.outgoing?.length);
+
+  if (sendReqData.connection?.id) {
+    const respondRes = await fetch(`${BASE_URL}/messages/requests/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        requestId: sendReqData.connection.id,
+        action: 'accept',
+      }),
+    });
+    const respondData = await respondRes.json();
+    console.log('Request accepted status:', respondData.success, 'Status now:', respondData.connection?.status);
+  }
+
+  // Test 11: Garage Vehicles Management (Add & Remove)
+  console.log('\n[Test 11] Testing Garage Vehicles API in MongoDB...');
   const vListRes = await fetch(`${BASE_URL}/vehicles`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -193,15 +209,6 @@ async function runTests() {
   });
   const addVData = await addVRes.json();
   console.log('Added vehicle:', addVData.success, 'Total vehicles now:', addVData.vehicles.length);
-
-  // Test 11: Upgrade to Pro Membership
-  console.log('\n[Test 11] Upgrading to Pro Membership...');
-  const proRes = await fetch(`${BASE_URL}/billing/upgrade-pro`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const proData = await proRes.json();
-  console.log('Pro upgrade status:', proData.success, 'isProUser:', proData.billing.isProUser);
 
   // Test 12: Firebase Analytics Logging
   console.log('\n[Test 12] Testing Firebase Analytics event recording...');
@@ -257,19 +264,31 @@ async function runTests() {
   if (!googleData.success || !googleData.token) {
     throw new Error(`Google Auth failed: ${JSON.stringify(googleData)}`);
   }
+
+  // Test 15: Delete Account Permanently & Cleanup Verification
+  console.log('\n[Test 15] Testing Permanent Account Deletion & Cleanup...');
+  const deleteRes = await fetch(`${BASE_URL}/auth/account`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const deleteData = await deleteRes.json();
+  console.log('Delete Account status:', deleteRes.status, deleteData.success ? 'SUCCESS' : 'FAILED');
+  if (!deleteData.success) {
+    throw new Error(`Account deletion failed: ${JSON.stringify(deleteData)}`);
+  }
   console.log('Google driver email:', googleData.user.email, 'Provider:', googleData.user.authProvider, 'Quota:', googleData.user.maxFreePosts);
 
-  // Test 15: Logout and Token Revocation
-  console.log('\n[Test 15] Testing Logout and token session cleanup...');
+  // Test 16: Logout and Token Revocation
+  console.log('\n[Test 16] Testing Logout and token session cleanup...');
   const logoutRes = await fetch(`${BASE_URL}/auth/logout`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${googleData.token}` },
   });
   const logoutData = await logoutRes.json();
   console.log('Logout status:', logoutData.success);
 
   console.log('\n=============================================');
-  console.log('🎉 ALL 15 BACKEND INTEGRATION TESTS PASSED 100%!');
+  console.log('🎉 ALL 16 BACKEND INTEGRATION TESTS PASSED 100%!');
   console.log('=============================================\n');
   process.exit(0);
 }

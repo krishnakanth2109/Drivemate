@@ -19,7 +19,7 @@ const UPDATES_DATA: UpdateItem[] = [
     summary:
       "All members can now connect with verified drivers, coordinate carpools, and share real-time road conditions.",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224155-8d04cb21cd6c",
+      "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "2",
@@ -29,7 +29,7 @@ const UPDATES_DATA: UpdateItem[] = [
     summary:
       "Southbound lane closures reported between exit 24 and 29. Expect minor delays during peak evening hours.",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1519817650390-64a93db51149",
+      "https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "3",
@@ -39,7 +39,7 @@ const UPDATES_DATA: UpdateItem[] = [
     summary:
       "Join 40+ local drivers this Saturday at Skyline Viewpoint. Route sharing, coffee, and battery charging stalls available.",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1503376780353-7e6692767b70",
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "4",
@@ -49,7 +49,7 @@ const UPDATES_DATA: UpdateItem[] = [
     summary:
       "OBD-II sync algorithms now calculate real-time fuel efficiency and predictive battery health degradation notifications.",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1563720223185-11003d516935",
+      "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=800&q=80",
   },
 ];
 

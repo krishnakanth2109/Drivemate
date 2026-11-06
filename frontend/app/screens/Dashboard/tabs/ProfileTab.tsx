@@ -26,6 +26,7 @@ import {
   FileTextIcon,
   UserIcon,
   PlusIcon,
+  TrashIcon,
 } from "../../../components/Icons";
 import { authAPI, vehiclesAPI, postsAPI } from "../../../services/api";
 import { getUserProfile, StoredUserProfile } from "../../../services/storage";
@@ -55,6 +56,40 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const [totalLikesCount, setTotalLikesCount] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account Permanently",
+      "Are you sure you want to permanently delete your Drivemate driver account? All your posts, profile information, vehicles, and message connections will be irreversibly erased.\n\nThis action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Forever",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              const res = await authAPI.deleteAccount();
+              if (res.success) {
+                Alert.alert(
+                  "Account Deleted",
+                  "Your account and all associated data have been permanently removed.",
+                  [{ text: "OK", onPress: onSignOut }]
+                );
+              } else {
+                Alert.alert("Deletion Failed", res.error || "Unable to delete account at this time.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to communicate with server.");
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Fetch complete profile, garage vehicles, and user posts live from backend
   const fetchBackendData = async () => {
@@ -343,9 +378,35 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         }}
         activeOpacity={0.7}
       >
-        <LogOutIcon size={16} color="#ef4444" />
+        <LogOutIcon size={16} color="#71717a" />
         <Text style={styles.signOutBtnText}>Sign Out</Text>
       </TouchableOpacity>
+
+      {/* Danger Zone: Permanent Account Deletion */}
+      <View style={styles.dangerZoneCard}>
+        <View style={styles.dangerZoneHeader}>
+          <TrashIcon size={15} color="#ef4444" />
+          <Text style={styles.dangerZoneTitle}>Delete Account</Text>
+        </View>
+        <Text style={styles.dangerZoneSub}>
+          Permanently erase your Drivemate profile, verified garage, community posts, and message history.
+        </Text>
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
+          onPress={handleDeleteAccount}
+          disabled={isDeleting}
+          activeOpacity={0.7}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <TrashIcon size={15} color="#ffffff" />
+              <Text style={styles.deleteAccountBtnText}>Delete Account Permanently</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };
@@ -664,15 +725,55 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#e4e4e7",
     paddingVertical: 14,
     borderRadius: 14,
     marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   signOutBtnText: {
-    color: "#ef4444",
+    color: "#71717a",
     fontSize: 14,
+    fontWeight: "600",
+  },
+  dangerZoneCard: {
+    backgroundColor: "#fef2f2",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    padding: 16,
+    marginBottom: 28,
+  },
+  dangerZoneHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  dangerZoneTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#dc2626",
+    letterSpacing: 0.3,
+  },
+  dangerZoneSub: {
+    fontSize: 12,
+    color: "#7f1d1d",
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#dc2626",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  deleteAccountBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
     fontWeight: "700",
   },
 });

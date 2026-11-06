@@ -30,8 +30,13 @@ interface HomeTabProps {
   posts: PostItem[];
   onToggleLike: (id: string) => void;
   onOpenCreatePost: () => void;
-  onNavigateTab?: (tab: "home" | "messaging" | "updates" | "services" | "profile") => void;
+  onNavigateTab?: (
+    tab: "home" | "messaging" | "updates" | "services" | "profile",
+    mode?: "chats" | "requests" | "discover",
+    roomId?: string
+  ) => void;
   userName?: string;
+  userId?: string;
   userAvatar?: string;
 }
 
@@ -41,6 +46,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
   onOpenCreatePost,
   onNavigateTab,
   userName = "Driver",
+  userId,
   userAvatar,
 }) => {
   // Driver Profile Modal State
@@ -49,14 +55,26 @@ const HomeTab: React.FC<HomeTabProps> = ({
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [driversList, setDriversList] = useState<DriverProfile[]>([]);
+  const [connections, setConnections] = useState<any[]>([]);
   const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
 
   // Refresh discoverable drivers & connection statuses
   const refreshDrivers = async () => {
     try {
-      const res = await messagesAPI.getDrivers();
-      if (res.success && Array.isArray(res.drivers)) {
-        setDriversList(res.drivers);
+      const [driversRes, reqRes] = await Promise.all([
+        messagesAPI.getDrivers(),
+        messagesAPI.getRequests(),
+      ]);
+      if (driversRes.success && Array.isArray(driversRes.drivers)) {
+        setDriversList(driversRes.drivers);
+      }
+      if (reqRes.success) {
+        const all = reqRes.all || [
+          ...(reqRes.incoming || []),
+          ...(reqRes.outgoing || []),
+          ...(reqRes.accepted || []),
+        ];
+        setConnections(all);
       }
     } catch {}
   };
@@ -67,6 +85,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
   const handleOpenDriverProfile = (post: PostItem) => {
     const isSelf =
+      (userId && post.userId && post.userId === userId) ||
       post.author.toLowerCase() === userName.toLowerCase() ||
       post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;
 
@@ -77,15 +96,35 @@ const HomeTab: React.FC<HomeTabProps> = ({
         d.fullName.toLowerCase() === post.author.toLowerCase()
     );
 
-    const driverData: DriverProfile = matched || {
-      uid: post.userId || `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`,
-      fullName: post.author,
-      username: post.authorTag.replace(/^@/, ""),
-      email: "",
-      location: post.fromCity || "Driver",
-      drivingStyle: post.tag?.replace("#", "") || "Community Driver",
-      vehicleName: "Registered Driver",
-      connectionStatus: isSelf ? "accepted" : "none",
+    const targetUid =
+      post.userId ||
+      (matched ? matched.uid : isSelf && userId ? userId : `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`);
+    const targetName = matched?.fullName || post.author || "Driver";
+    const targetTag = matched?.username ? `@${matched.username}` : post.authorTag;
+
+    const existingConn = connections.find(
+      (c: any) =>
+        (c.fromUserId === targetUid && c.toUserId === userId) ||
+        (c.toUserId === targetUid && c.fromUserId === userId) ||
+        (isSelf && (c.fromUserId === userId || c.toUserId === userId)) ||
+        (c.toUserName && c.toUserName.toLowerCase() === targetName.toLowerCase()) ||
+        (c.fromUserName && c.fromUserName.toLowerCase() === targetName.toLowerCase())
+    );
+
+    const effectiveStatus: "none" | "pending" | "accepted" | "declined" =
+      existingConn?.status || matched?.connectionStatus || "none";
+
+    const driverData: DriverProfile = {
+      ...(matched || {}),
+      uid: targetUid,
+      fullName: targetName,
+      username: targetTag.replace(/^@/, ""),
+      email: matched?.email || "",
+      location: post.fromCity || matched?.location || "Driver",
+      drivingStyle: post.tag?.replace("#", "") || matched?.drivingStyle || "Community Driver",
+      vehicleName: matched?.vehicleName || "Registered Driver",
+      connectionStatus: effectiveStatus,
+      isSender: existingConn ? existingConn.fromUserId === userId : false,
     };
 
     setSelectedDriver(driverData);
@@ -103,20 +142,37 @@ const HomeTab: React.FC<HomeTabProps> = ({
       );
 
       if (res.success) {
-        setDriversList((prev) =>
-          prev.map((d) =>
-            d.uid === driver.uid
-              ? { ...d, connectionStatus: "pending", isSender: true }
-              : d
-          )
-        );
+        setDriversList((prev) => {
+          const exists = prev.some((d) => d.uid === driver.uid);
+          if (exists) {
+            return prev.map((d) =>
+              d.uid === driver.uid
+                ? { ...d, connectionStatus: "pending", isSender: true }
+                : d
+            );
+          }
+          return [...prev, { ...driver, connectionStatus: "pending", isSender: true }];
+        });
+
+        if (res.connection) {
+          setConnections((prev) => [res.connection, ...prev]);
+        }
+
         refreshDrivers();
+
         Alert.alert(
-          "Invite Sent!",
-          `Connection invite sent to ${driver.fullName}. Once they accept, you will receive an email confirmation and can chat directly in Driver Comms.`
+          "Request Sent!",
+          `Connection request sent to ${driver.fullName}. Once they accept your invitation, direct messaging will be unlocked.`,
+          [
+            { text: "OK" },
+            {
+              text: "View Requests",
+              onPress: () => onNavigateTab && onNavigateTab("messaging", "requests"),
+            },
+          ]
         );
       } else {
-        Alert.alert("Unable to send invite", res.error || "Please try again later.");
+        Alert.alert("Unable to send request", res.error || "Please try again later.");
       }
     } catch (err: any) {
       Alert.alert("Request Error", err.message || "Network error sending invitation.");
@@ -128,12 +184,12 @@ const HomeTab: React.FC<HomeTabProps> = ({
   const handleSendConnectionRequest = async () => {
     if (!selectedDriver) return;
     Alert.alert(
-      "Send Connection Invite?",
-      `Would you like to send an invitation to ${selectedDriver.fullName} (@${selectedDriver.username}) to start messaging?`,
+      "Send Connection Request?",
+      `You must send a connection request to ${selectedDriver.fullName} (@${selectedDriver.username}) first. Once they accept, you will be able to message them directly.\n\nSend connection request now?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Send Invite",
+          text: "Send Request",
           onPress: async () => {
             await sendInviteToDriver(selectedDriver);
             setSelectedDriver((prev) =>
@@ -146,15 +202,22 @@ const HomeTab: React.FC<HomeTabProps> = ({
   };
 
   const handleTapMessageOnPost = (post: PostItem) => {
+    // 1. Check if clicking own post
     const isSelf =
+      (userId && post.userId && post.userId === userId) ||
       post.author.toLowerCase() === userName.toLowerCase() ||
       post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;
 
     if (isSelf) {
-      if (onNavigateTab) onNavigateTab("profile");
+      Alert.alert(
+        "Your Post",
+        "This is your own community post. You cannot send a connection request or message to yourself.",
+        [{ text: "OK" }]
+      );
       return;
     }
 
+    // 2. Resolve target driver UID & data
     const matched = driversList.find(
       (d) =>
         (post.userId && d.uid === post.userId) ||
@@ -162,37 +225,90 @@ const HomeTab: React.FC<HomeTabProps> = ({
         d.fullName.toLowerCase() === post.author.toLowerCase()
     );
 
-    const driverData: DriverProfile = matched || {
-      uid: post.userId || `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`,
-      fullName: post.author,
-      username: post.authorTag.replace(/^@/, ""),
-      email: "",
-      location: post.fromCity || "Driver",
-      drivingStyle: post.tag?.replace("#", "") || "Community Driver",
-      vehicleName: "Registered Driver",
-      connectionStatus: "none",
+    const targetUid =
+      post.userId ||
+      (matched ? matched.uid : `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`);
+    const targetName = matched?.fullName || post.author || "Driver";
+    const targetTag = matched?.username ? `@${matched.username}` : post.authorTag;
+
+    // 3. Find if there is an existing connection between current user and target driver
+    const existingConn = connections.find(
+      (c: any) =>
+        (c.fromUserId === targetUid && c.toUserId === userId) ||
+        (c.toUserId === targetUid && c.fromUserId === userId) ||
+        (c.toUserName && c.toUserName.toLowerCase() === targetName.toLowerCase()) ||
+        (c.fromUserName && c.fromUserName.toLowerCase() === targetName.toLowerCase())
+    );
+
+    const effectiveStatus: "none" | "pending" | "accepted" | "declined" =
+      existingConn?.status || matched?.connectionStatus || "none";
+
+    console.log("💬 [handleTapMessageOnPost]", {
+      targetUid,
+      targetName,
+      effectiveStatus,
+      isSelf,
+    });
+
+    const driverData: DriverProfile = {
+      ...(matched || {}),
+      uid: targetUid,
+      fullName: targetName,
+      username: targetTag.replace(/^@/, ""),
+      email: matched?.email || "",
+      location: post.fromCity || matched?.location || "Driver",
+      drivingStyle: post.tag?.replace("#", "") || matched?.drivingStyle || "Community Driver",
+      vehicleName: matched?.vehicleName || "Registered Driver",
+      connectionStatus: effectiveStatus,
+      isSender: existingConn ? existingConn.fromUserId === userId : false,
     };
 
-    if (driverData.connectionStatus === "accepted") {
-      if (onNavigateTab) onNavigateTab("messaging");
-    } else if (driverData.connectionStatus === "pending") {
+    // 4. If connection is already accepted, navigate straight to active direct chat
+    if (effectiveStatus === "accepted") {
+      if (onNavigateTab) {
+        onNavigateTab("messaging", "chats", existingConn?.roomId);
+      }
+      return;
+    }
+
+    // 5. If connection request is already pending, alert user
+    if (effectiveStatus === "pending") {
       Alert.alert(
-        "Invite Pending",
-        `You have already sent a connection invitation to ${driverData.fullName}. Waiting for them to accept.`
-      );
-    } else {
-      Alert.alert(
-        "Send Connection Invite?",
-        `Would you like to send an invitation to ${driverData.fullName} (@${driverData.username}) to start messaging?`,
+        "Request Pending Approval",
+        `Your connection request to ${targetName} (${targetTag}) is currently pending approval. Once they accept your invitation, direct messaging will be unlocked.`,
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Send Invite",
-            onPress: () => sendInviteToDriver(driverData),
+            text: "View Profile",
+            onPress: () => handleOpenDriverProfile(post),
+          },
+          {
+            text: "View Requests",
+            onPress: () => onNavigateTab && onNavigateTab("messaging", "requests"),
           },
         ]
       );
+      return;
     }
+
+    // 6. If not connected yet: prompt user directly to send invitation request or view profile
+    Alert.alert(
+      `Message ${targetName}?`,
+      `To message ${targetName} (${targetTag}), you must send a connection request first. Once they accept your invitation, direct messaging will be unlocked.\n\nSend invitation request now?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "View Profile",
+          onPress: () => handleOpenDriverProfile(post),
+        },
+        {
+          text: "Send Request",
+          onPress: async () => {
+            await sendInviteToDriver(driverData);
+          },
+        },
+      ]
+    );
   };
 
   const handleGoToMessaging = () => {
@@ -442,44 +558,88 @@ const HomeTab: React.FC<HomeTabProps> = ({
             )}
 
             {/* Interaction Bar */}
-            <View style={styles.interactionsRow}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => onToggleLike(post.id)}
-              >
-                <HeartIcon
-                  size={18}
-                  color={post.isLiked ? "#ef4444" : "#71717a"}
-                  filled={post.isLiked}
-                />
-                <Text
-                  style={[
-                    styles.actionText,
-                    post.isLiked && styles.actionTextLiked,
-                  ]}
-                >
-                  {post.likes}
-                </Text>
-              </TouchableOpacity>
+            {(() => {
+              const isPostSelf =
+                (userId && post.userId && post.userId === userId) ||
+                post.author.toLowerCase() === userName.toLowerCase() ||
+                post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;
 
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleTapMessageOnPost(post)}
-              >
-                <MessageIcon size={18} color="#71717a" />
-                <Text style={styles.actionText}>
-                  {post.commentsCount > 0 ? `${post.commentsCount} comments` : "Message"}
-                </Text>
-              </TouchableOpacity>
+              const postMatched = driversList.find(
+                (d) =>
+                  (post.userId && d.uid === post.userId) ||
+                  d.username.toLowerCase() === post.authorTag.replace(/^@/, "").toLowerCase() ||
+                  d.fullName.toLowerCase() === post.author.toLowerCase()
+              );
 
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleShare(post)}
-              >
-                <ShareIcon size={18} color="#71717a" />
-                <Text style={styles.actionText}>Share</Text>
-              </TouchableOpacity>
-            </View>
+              const postTargetUid =
+                post.userId ||
+                (postMatched ? postMatched.uid : isPostSelf && userId ? userId : `driver_${post.authorTag.replace(/[^a-zA-Z0-9]/g, "")}`);
+              const postTargetName = postMatched?.fullName || post.author;
+
+              const postConn = connections.find(
+                (c: any) =>
+                  (c.fromUserId === postTargetUid && c.toUserId === userId) ||
+                  (c.toUserId === postTargetUid && c.fromUserId === userId) ||
+                  (isPostSelf && (c.fromUserId === userId || c.toUserId === userId)) ||
+                  (c.toUserName && c.toUserName.toLowerCase() === postTargetName.toLowerCase()) ||
+                  (c.fromUserName && c.fromUserName.toLowerCase() === postTargetName.toLowerCase())
+              );
+
+              const postConnStatus = postConn?.status || postMatched?.connectionStatus || "none";
+              const isConnAccepted = postConnStatus === "accepted";
+              const isConnPending = postConnStatus === "pending";
+
+              return (
+                <View style={styles.interactionsRow}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => onToggleLike(post.id)}
+                  >
+                    <HeartIcon
+                      size={18}
+                      color={post.isLiked ? "#ef4444" : "#71717a"}
+                      filled={post.isLiked}
+                    />
+                    <Text
+                      style={[
+                        styles.actionText,
+                        post.isLiked && styles.actionTextLiked,
+                      ]}
+                    >
+                      {post.likes}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleTapMessageOnPost(post)}
+                    activeOpacity={0.7}
+                  >
+                    <MessageIcon
+                      size={18}
+                      color={isConnAccepted ? "#10b981" : isConnPending ? "#f59e0b" : "#71717a"}
+                    />
+                    <Text
+                      style={[
+                        styles.actionText,
+                        isConnAccepted && { color: "#10b981", fontWeight: "600" },
+                        isConnPending && { color: "#f59e0b", fontWeight: "600" },
+                      ]}
+                    >
+                      {isConnAccepted ? "Message" : isConnPending ? "Pending" : "Message"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleShare(post)}
+                  >
+                    <ShareIcon size={18} color="#71717a" />
+                    <Text style={styles.actionText}>Share</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
         );
       })}
@@ -607,18 +767,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
                 {/* Action Button: Connect / Message / Profile */}
                 <View style={styles.modalActionContainer}>
-                  {selectedDriver.fullName.toLowerCase() === userName.toLowerCase() ? (
-                    <TouchableOpacity
-                      style={styles.primaryActionButton}
-                      onPress={handleGoToProfile}
-                      activeOpacity={0.85}
-                    >
-                      <UserIcon size={16} color="#ffffff" />
-                      <Text style={styles.primaryActionButtonText}>
-                        View My Profile & Garage
-                      </Text>
-                    </TouchableOpacity>
-                  ) : selectedDriver.connectionStatus === "accepted" ? (
+                  {selectedDriver.connectionStatus === "accepted" ? (
                     <TouchableOpacity
                       style={styles.primaryActionButton}
                       onPress={handleGoToMessaging}
@@ -634,6 +783,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
                       <Text style={styles.pendingStatusText}>
                         ⏳ Connection Request Pending Approval
                       </Text>
+                      <TouchableOpacity
+                        style={styles.viewRequestsModalBtn}
+                        onPress={() => {
+                          setIsDriverModalVisible(false);
+                          if (onNavigateTab) {
+                            onNavigateTab("messaging", "requests");
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.viewRequestsModalBtnText}>
+                          View in Requests →
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -648,7 +811,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         <>
                           <SparklesIcon size={16} color="#ffffff" />
                           <Text style={styles.primaryActionButtonText}>
-                            Request Connection & Message
+                            Send Connection Request
                           </Text>
                         </>
                       )}
@@ -1239,6 +1402,20 @@ const styles = StyleSheet.create({
   pendingStatusText: {
     color: "#92400e",
     fontSize: 13,
+    fontWeight: "700",
+  },
+  viewRequestsModalBtn: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  viewRequestsModalBtnText: {
+    color: "#b45309",
+    fontSize: 12,
     fontWeight: "700",
   },
   postPhotosContainer: {

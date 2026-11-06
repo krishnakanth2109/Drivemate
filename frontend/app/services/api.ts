@@ -597,7 +597,12 @@ export const messagesAPI = {
   },
 
   async getRequests() {
-    return await request<{ incoming: ConnectionRequestItem[]; outgoing: ConnectionRequestItem[] }>(
+    return await request<{
+      incoming: ConnectionRequestItem[];
+      outgoing: ConnectionRequestItem[];
+      accepted?: ConnectionRequestItem[];
+      all?: ConnectionRequestItem[];
+    }>(
       "/messages/requests",
       {
         method: "GET",

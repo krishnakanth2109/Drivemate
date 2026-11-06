@@ -97,10 +97,10 @@ export const createPost = async (req, res) => {
         isLiked: false,
       },
       quota: {
-        freePostsUsed: updatedUser.freePostsUsed,
-        maxFreePosts: updatedUser.maxFreePosts,
-        singlePasses: updatedUser.singlePasses,
-        isProUser: updatedUser.isProUser,
+        freePostsUsed: freshUser.freePostsUsed || 0,
+        maxFreePosts: freshUser.maxFreePosts || 100,
+        singlePasses: freshUser.singlePasses || 0,
+        isProUser: Boolean(freshUser.isProUser),
       },
     });
   } catch (error) {

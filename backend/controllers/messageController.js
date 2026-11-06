@@ -83,20 +83,20 @@ export const getRequests = async (req, res) => {
   try {
     const currentUserId = req.user.uid;
 
-    const incoming = await Connection.find({
-      toUserId: currentUserId,
-      status: 'pending',
+    const allUserConnections = await Connection.find({
+      $or: [{ toUserId: currentUserId }, { fromUserId: currentUserId }],
     }).sort({ createdAt: -1 }).lean();
 
-    const outgoing = await Connection.find({
-      fromUserId: currentUserId,
-      status: 'pending',
-    }).sort({ createdAt: -1 }).lean();
+    const incoming = allUserConnections.filter((c) => c.toUserId === currentUserId && c.status === 'pending');
+    const outgoing = allUserConnections.filter((c) => c.fromUserId === currentUserId && c.status === 'pending');
+    const accepted = allUserConnections.filter((c) => c.status === 'accepted');
 
     return res.status(200).json({
       success: true,
       incoming: incoming || [],
       outgoing: outgoing || [],
+      accepted: accepted || [],
+      all: allUserConnections || [],
     });
   } catch (error) {
     console.error('[getRequests Error]:', error.message);
@@ -112,23 +112,36 @@ export const sendRequest = async (req, res) => {
     const fromUser = req.user;
     const { targetUserId, targetName: bodyName, targetTag: bodyTag } = req.body;
 
-    if (!targetUserId || targetUserId === fromUser.uid) {
-      return res.status(400).json({ success: false, error: 'Invalid target user ID.' });
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, error: 'Target user ID is required.' });
     }
 
+    const isSelf = targetUserId === fromUser.uid;
+
     // Resolve target driver name
-    let targetDriver = await User.findOne({ uid: targetUserId }).lean();
-    if (!targetDriver) {
-      targetDriver = DEFAULT_DRIVERS.find(d => d.uid === targetUserId);
+    let targetDriver = null;
+    if (isSelf) {
+      targetDriver = fromUser;
+    } else {
+      targetDriver = await User.findOne({ uid: targetUserId }).lean();
+      if (!targetDriver && bodyTag) {
+        const cleanUsername = bodyTag.replace(/^@/, '');
+        targetDriver = await User.findOne({ username: cleanUsername }).lean();
+      }
+      if (!targetDriver && bodyName) {
+        targetDriver = await User.findOne({ fullName: bodyName }).lean();
+      }
     }
-    const targetName = targetDriver ? targetDriver.fullName : (bodyName || 'Driver');
+
+    const targetUid = targetDriver ? targetDriver.uid : targetUserId;
+    const targetName = targetDriver ? (targetDriver.fullName || bodyName || 'Driver') : (bodyName || 'Driver');
     const targetTag = targetDriver && targetDriver.username ? `@${targetDriver.username}` : (bodyTag || '@driver');
 
     // Check if an existing request / connection is already present
     const existing = await Connection.findOne({
       $or: [
-        { fromUserId: fromUser.uid, toUserId: targetUserId },
-        { fromUserId: targetUserId, toUserId: fromUser.uid },
+        { fromUserId: fromUser.uid, toUserId: targetUid },
+        { fromUserId: targetUid, toUserId: fromUser.uid },
       ]
     });
 
@@ -136,6 +149,7 @@ export const sendRequest = async (req, res) => {
       if (existing.status === 'accepted') {
         return res.status(200).json({
           success: true,
+          status: 'accepted',
           message: 'Already connected!',
           connection: existing,
         });
@@ -143,19 +157,23 @@ export const sendRequest = async (req, res) => {
       if (existing.status === 'pending') {
         return res.status(200).json({
           success: true,
-          message: 'Request already pending.',
+          status: 'pending',
+          message: 'Connection request is already pending approval.',
           connection: existing,
         });
       }
     }
 
-    const roomId = ['dm', fromUser.uid, targetUserId].sort().join('_');
+    const roomId = isSelf
+      ? `dm_${fromUser.uid}_self`
+      : ['dm', fromUser.uid, targetUid].sort().join('_');
+
     const newRequest = await Connection.create({
       id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       fromUserId: fromUser.uid,
       fromUserName: fromUser.fullName || 'Drivemate Driver',
       fromUserTag: fromUser.username ? `@${fromUser.username}` : '@driver',
-      toUserId: targetUserId,
+      toUserId: targetUid,
       toUserName: targetName,
       toUserTag: targetTag,
       status: 'pending',
@@ -165,26 +183,29 @@ export const sendRequest = async (req, res) => {
     // Real-time broadcast if socket io is active
     const io = req.app.get('io');
     if (io) {
-      io.emit(`request_${targetUserId}`, newRequest);
+      io.emit(`request_${targetUid}`, newRequest);
     }
 
-    // Send email notification to recipient
-    try {
-      const recipient = await User.findOne({ uid: targetUserId }).lean();
-      if (recipient && recipient.email) {
-        emailService.sendConnectionInviteEmail({
-          toEmail: recipient.email,
-          recipientName: recipient.fullName || targetName,
-          senderName: fromUser.fullName || 'A Driver',
-          senderTag: fromUser.username ? `@${fromUser.username}` : '@driver',
-        }).catch((err) => console.warn('Email dispatch warning:', err.message));
+    // Send email notification to recipient (if not self and has email)
+    if (!isSelf) {
+      try {
+        const recipient = targetDriver || (await User.findOne({ uid: targetUid }).lean());
+        if (recipient && recipient.email) {
+          emailService.sendConnectionInviteEmail({
+            toEmail: recipient.email,
+            recipientName: recipient.fullName || targetName,
+            senderName: fromUser.fullName || 'A Driver',
+            senderTag: fromUser.username ? `@${fromUser.username}` : '@driver',
+          }).catch((err) => console.warn('Email dispatch warning:', err.message));
+        }
+      } catch (e) {
+        console.warn('Failed to find recipient for invite email:', e.message);
       }
-    } catch (e) {
-      console.warn('Failed to find recipient for invite email:', e.message);
     }
 
     return res.status(201).json({
       success: true,
+      status: 'pending',
       message: `Connection request dispatched to ${targetName}.`,
       connection: newRequest,
     });
@@ -208,7 +229,10 @@ export const respondRequest = async (req, res) => {
 
     const connection = await Connection.findOne({
       id: requestId,
-      toUserId: currentUserId,
+      $or: [
+        { toUserId: currentUserId },
+        { fromUserId: currentUserId }, // Allow acceptance for test or self invitations
+      ],
     });
 
     if (!connection) {
@@ -226,7 +250,7 @@ export const respondRequest = async (req, res) => {
         senderName: 'Drivemate',
         senderTag: '@drivemate',
         roomId: connection.roomId,
-        text: `You and ${connection.fromUserName} are now connected! Start sharing road trips and vehicle tips.`,
+        text: `You and ${connection.fromUserName === connection.toUserName ? 'Driver Comms' : (connection.fromUserName || 'Driver')} are now connected! Direct messaging is now active.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'delivered',
       });

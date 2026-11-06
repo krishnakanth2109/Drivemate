@@ -69,10 +69,24 @@ interface ChatMessage {
 
 type TabMode = "chats" | "requests" | "discover";
 
-const MessagingTab: React.FC = () => {
-  const [activeTabMode, setActiveTabMode] = useState<TabMode>("chats");
+interface MessagingTabProps {
+  initialTabMode?: TabMode;
+  initialRoomId?: string;
+}
+
+const MessagingTab: React.FC<MessagingTabProps> = ({
+  initialTabMode = "chats",
+  initialRoomId,
+}) => {
+  const [activeTabMode, setActiveTabMode] = useState<TabMode>(initialTabMode);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
+
+  useEffect(() => {
+    if (initialTabMode) {
+      setActiveTabMode(initialTabMode);
+    }
+  }, [initialTabMode]);
 
   // Messages in active conversation
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -140,6 +154,12 @@ const MessagingTab: React.FC = () => {
       const convRes = await messagesAPI.getConversations();
       if (convRes.success && Array.isArray(convRes.conversations)) {
         setConversations(convRes.conversations);
+        if (initialRoomId) {
+          const match = convRes.conversations.find((c) => c.roomId === initialRoomId);
+          if (match) {
+            setActiveConversation(match);
+          }
+        }
       }
 
       // 2. Fetch Requests
@@ -1417,8 +1437,25 @@ const MessagingTab: React.FC = () => {
                     <Text style={styles.reqName}>{req.toUserName}</Text>
                     <Text style={styles.reqTag}>{req.toUserTag}</Text>
                   </View>
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>Pending</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={styles.pendingBadge}>
+                      <Text style={styles.pendingBadgeText}>Pending</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.acceptBtn}
+                      onPress={() => handleRespondRequest(req.id, "accept")}
+                      disabled={isRespondingId === req.id}
+                      activeOpacity={0.8}
+                    >
+                      {isRespondingId === req.id ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <>
+                          <CheckCircleIcon size={12} color="#ffffff" />
+                          <Text style={[styles.acceptBtnText, { fontSize: 12 }]}>Accept</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))

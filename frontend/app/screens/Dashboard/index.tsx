@@ -31,9 +31,12 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Dashboard">
 const Dashboard: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [currentTab, setCurrentTab] = useState<TabKey>("home");
+  const [messagingInitialMode, setMessagingInitialMode] = useState<"chats" | "requests" | "discover">("chats");
+  const [messagingInitialRoomId, setMessagingInitialRoomId] = useState<string | undefined>(undefined);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
 
   // User Profile
+  const [userId, setUserId] = useState<string>("");
   const [userName, setUserName] = useState("Driver");
   const [userEmail, setUserEmail] = useState("");
   const [userAvatar, setUserAvatar] = useState<string | undefined>(undefined);
@@ -51,6 +54,7 @@ const Dashboard: React.FC = () => {
       // 1. Load user profile from AsyncStorage or backend
       const stored = await getUserProfile();
       if (stored && isMounted) {
+        if (stored.uid) setUserId(stored.uid);
         if (stored.fullName) setUserName(stored.fullName);
         if (stored.email) setUserEmail(stored.email);
         if (stored.profilePicture || stored.photoUrl) {
@@ -61,6 +65,7 @@ const Dashboard: React.FC = () => {
       try {
         const profileRes = await authAPI.getProfile();
         if (profileRes.success && profileRes.user && isMounted) {
+          if (profileRes.user.uid) setUserId(profileRes.user.uid);
           if (profileRes.user.fullName) setUserName(profileRes.user.fullName);
           if (profileRes.user.email) setUserEmail(profileRes.user.email);
           if (profileRes.user.profilePicture || profileRes.user.photoUrl) {
@@ -237,12 +242,22 @@ const Dashboard: React.FC = () => {
             posts={posts}
             onToggleLike={handleToggleLike}
             onOpenCreatePost={handleOpenCreatePost}
-            onNavigateTab={(tab) => setCurrentTab(tab)}
+            onNavigateTab={(tab, mode, roomId) => {
+              if (mode) setMessagingInitialMode(mode);
+              if (roomId) setMessagingInitialRoomId(roomId);
+              setCurrentTab(tab);
+            }}
             userName={userName}
+            userId={userId}
             userAvatar={userAvatar}
           />
         )}
-        {currentTab === "messaging" && <MessagingTab />}
+        {currentTab === "messaging" && (
+          <MessagingTab
+            initialTabMode={messagingInitialMode}
+            initialRoomId={messagingInitialRoomId}
+          />
+        )}
         {currentTab === "updates" && <UpdatesTab />}
         {currentTab === "services" && <ServicesTab />}
         {currentTab === "profile" && (

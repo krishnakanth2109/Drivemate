@@ -37,7 +37,7 @@ const SERVICES_DATA: ServiceItem[] = [
     badge: "24/7 HOTLINE",
     status: "Active",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1619642751034-765dfdf7c58e",
+      "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "2",
@@ -47,7 +47,7 @@ const SERVICES_DATA: ServiceItem[] = [
       "Secure encrypted storage for driver license, vehicle registration, and auto insurance cards.",
     status: "Configured",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1558494949-ef010cbdcc31",
+      "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "3",
@@ -58,7 +58,7 @@ const SERVICES_DATA: ServiceItem[] = [
     badge: "AI SCAN",
     status: "Available",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1486006920555-c77dce18193b",
+      "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "4",
@@ -68,7 +68,7 @@ const SERVICES_DATA: ServiceItem[] = [
       "Find high-speed chargers with live availability, stall power ratings, and peak hour pricing.",
     status: "Available",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1593941707882-a5bba14938c7",
+      "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "5",
@@ -78,7 +78,7 @@ const SERVICES_DATA: ServiceItem[] = [
       "Automatic mileage tracking, journey waypoint history, and vehicle commute logs.",
     status: "Available",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1554224154-26032ffc0d07",
+      "https://images.unsplash.com/photo-1554224154-26032ffc0d07?auto=format&fit=crop&w=800&q=80",
   },
   {
     id: "game_arcade",
@@ -89,7 +89,7 @@ const SERVICES_DATA: ServiceItem[] = [
     badge: "PLAYABLE",
     status: "Active",
     photoUrl:
-      "https://res.cloudinary.com/djl2x1rhf/image/fetch/f_auto,q_auto,w_800/https://images.unsplash.com/photo-1511512578047-dfb367046420",
+      "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80",
   },
 ];
 

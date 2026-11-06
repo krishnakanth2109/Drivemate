@@ -2,6 +2,8 @@ import { auth } from '../config/firebase.js';
 import { asyncStorage } from './asyncStorage.js';
 import { User } from '../models/User.js';
 import { Post } from '../models/Post.js';
+import Connection from '../models/Connection.js';
+import Message from '../models/Message.js';
 import { mongoose } from '../config/mongodb.js';
 
 const INITIAL_POSTS = [
@@ -197,6 +199,8 @@ class DataStore {
       try {
         await User.deleteOne({ uid });
         await Post.deleteMany({ userId: uid });
+        await Connection.deleteMany({ $or: [{ fromUserId: uid }, { toUserId: uid }] });
+        await Message.deleteMany({ senderId: uid });
       } catch (err) {
         console.warn(`[MongoDB] deleteUser error: ${err.message}`);
       }
