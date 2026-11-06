@@ -21,17 +21,14 @@ const getDevHost = (): string | null => {
   return null;
 };
 
+// Primary Production Render Backend URL
+const PRODUCTION_URL = "https://drivemate-fq3q.onrender.com/api";
+
 // Build candidate base URLs in priority order for robust multi-device reachability
 const getCandidateBaseUrls = (): string[] => {
   const list: string[] = [];
-  const devHost = getDevHost();
 
-  // 1. Dev Host IP from Expo / Browser if available
-  if (devHost) {
-    list.push(`http://${devHost}:5000/api`);
-  }
-
-  // 2. Explicit .env variable if provided
+  // 1. Explicit .env variable if provided
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_SERVER_URL;
   if (envUrl && envUrl.trim().length > 0) {
     const trimmed = envUrl.trim().replace(/\/+$/, "");
@@ -41,10 +38,18 @@ const getCandidateBaseUrls = (): string[] => {
     }
   }
 
-  // 3. Known LAN IP fallback
-  const lanUrl = "http://192.168.0.123:5000/api";
-  if (!list.includes(lanUrl)) {
-    list.push(lanUrl);
+  // 2. Primary Production Render URL
+  if (!list.includes(PRODUCTION_URL)) {
+    list.push(PRODUCTION_URL);
+  }
+
+  // 3. Dev Host IP from Expo / Browser if available
+  const devHost = getDevHost();
+  if (devHost && devHost !== "localhost" && !devHost.includes("127.0.0.1")) {
+    const devUrl = `http://${devHost}:5000/api`;
+    if (!list.includes(devUrl)) {
+      list.push(devUrl);
+    }
   }
 
   // 4. Android emulator special alias
@@ -52,7 +57,7 @@ const getCandidateBaseUrls = (): string[] => {
     list.push("http://10.0.2.2:5000/api");
   }
 
-  // 5. Standard localhost
+  // 5. Standard localhost fallback
   if (!list.includes("http://localhost:5000/api")) {
     list.push("http://localhost:5000/api");
   }
@@ -175,7 +180,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     console.error(`💥 [API ⏱️ TIMEOUT] ${method} ${cleanEndpoint} timed out after 6000ms`);
     return {
       success: false,
-      error: "Network request timed out. Please verify backend server is running on port 5000.",
+      error: "Network request timed out. Please check your internet connection.",
     };
   }
 
@@ -187,7 +192,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
   return {
     success: false,
-    error: `Could not reach backend server on port 5000 (${candidates.join(", ")}). Please ensure backend is running with 'npm start'.`,
+    error: `Unable to connect to Drivemate service (${candidates[0]}). Please check your internet connection.`,
   };
 }
 
