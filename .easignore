@@ -1,0 +1,27 @@
+# Ignore backend from mobile EAS build
+backend/
+
+# Ignore dependencies and git
+**/node_modules/
+**/.git/
+**/.expo/
+**/dist/
+
+# Ignore local properties and machine-specific configs
+**/local.properties
+local.properties
+
+# Ignore native build outputs and caches
+**/build/
+**/.cxx/
+**/.gradle/
+**/.kotlin/
+**/*.aab
+**/*.apk
+**/*.tsbuildinfo
+
+# Ignore temporary and test logs
+**/*.log
+**/*.log.txt
+eas_build_log*
+

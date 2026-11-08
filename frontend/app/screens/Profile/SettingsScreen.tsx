@@ -20,18 +20,27 @@ import {
   TrashIcon,
 } from "../../components/Icons";
 import { authAPI } from "../../services/api";
-import { getUserProfile } from "../../services/storage";
+import { getUserProfile, getThemeMode, saveThemeMode } from "../../services/storage";
 
 const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [isDeleting, setIsDeleting] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     getUserProfile().then((u) => {
       if (u?.email) setUserEmail(u.email);
     });
+    getThemeMode().then((savedDark) => {
+      setIsDarkMode(savedDark);
+    });
   }, []);
+
+  const handleToggleTheme = (val: boolean) => {
+    setIsDarkMode(val);
+    saveThemeMode(val);
+  };
 
   // Notifications
   const [trafficAlerts, setTrafficAlerts] = useState(true);
@@ -107,17 +116,17 @@ const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={["top", "bottom"]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDarkMode && styles.headerDark]}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[styles.backBtn, isDarkMode && styles.backBtnDark]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <ArrowLeftIcon size={20} color="#09090b" />
+          <ArrowLeftIcon size={20} color={isDarkMode ? "#ffffff" : "#09090b"} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings & Preferences</Text>
+        <Text style={[styles.headerTitle, isDarkMode && styles.textDark]}>Settings & Preferences</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -126,99 +135,99 @@ const SettingsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Notifications Section */}
-        <Text style={styles.sectionTitle}>Push Notifications</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Push Notifications</Text>
+        <View style={[styles.card, isDarkMode && styles.cardDark]}>
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Hazard & Road Alerts</Text>
-              <Text style={styles.rowSub}>Live warnings for fog, ice, and traffic stops</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Hazard & Road Alerts</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Live warnings for fog, ice, and traffic stops</Text>
             </View>
             <Switch
               value={trafficAlerts}
               onValueChange={setTrafficAlerts}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Discussion Replies</Text>
-              <Text style={styles.rowSub}>When other drivers reply to your posts</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Discussion Replies</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>When other drivers reply to your posts</Text>
             </View>
             <Switch
               value={communityReplies}
               onValueChange={setCommunityReplies}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Vehicle Maintenance Reminders</Text>
-              <Text style={styles.rowSub}>Tire pressure, brake wear, and inspection dates</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Vehicle Maintenance Reminders</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Tire pressure, brake wear, and inspection dates</Text>
             </View>
             <Switch
               value={serviceReminders}
               onValueChange={setServiceReminders}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>EV Charger Availability</Text>
-              <Text style={styles.rowSub}>Notifications for open stalls on saved routes</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>EV Charger Availability</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Notifications for open stalls on saved routes</Text>
             </View>
             <Switch
               value={chargingUpdates}
               onValueChange={setChargingUpdates}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
         </View>
 
         {/* Security Section */}
-        <Text style={styles.sectionTitle}>Security & Access</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Security & Access</Text>
+        <View style={[styles.card, isDarkMode && styles.cardDark]}>
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Face ID / Biometric Login</Text>
-              <Text style={styles.rowSub}>Unlock app instantly using biometrics</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Face ID / Biometric Login</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Unlock app instantly using biometrics</Text>
             </View>
             <Switch
               value={biometrics}
               onValueChange={setBiometrics}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Two-Factor Authentication (2FA)</Text>
-              <Text style={styles.rowSub}>Require verification code upon sign-in</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Two-Factor Authentication (2FA)</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Require verification code upon sign-in</Text>
             </View>
             <Switch
               value={twoFactor}
               onValueChange={setTwoFactor}
-              trackColor={{ false: "#e4e4e7", true: "#09090b" }}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
               thumbColor="#ffffff"
             />
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <TouchableOpacity
             style={styles.navRow}
@@ -230,55 +239,70 @@ const SettingsScreen: React.FC = () => {
             }
           >
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Change Password</Text>
-              <Text style={styles.rowSub}>Last updated 3 months ago</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Change Password</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Last updated 3 months ago</Text>
             </View>
-            <ChevronRightIcon size={18} color="#a1a1aa" />
+            <ChevronRightIcon size={18} color={isDarkMode ? "#9ca3af" : "#a1a1aa"} />
           </TouchableOpacity>
         </View>
 
         {/* Preferences Section */}
-        <Text style={styles.sectionTitle}>Units & Display</Text>
-        <View style={styles.card}>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Units & Display</Text>
+        <View style={[styles.card, isDarkMode && styles.cardDark]}>
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Distance Unit</Text>
-              <Text style={styles.rowSub}>Speedometer and route calculation</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Dark Theme</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Switch between light and dark UI mode</Text>
+            </View>
+            <Switch
+              value={isDarkMode}
+              onValueChange={handleToggleTheme}
+              trackColor={{ false: "#e4e4e7", true: "#3b82f6" }}
+              thumbColor="#ffffff"
+            />
+          </View>
+
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
+
+          <View style={styles.row}>
+            <View style={styles.rowInfo}>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Distance Unit</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Speedometer and route calculation</Text>
             </View>
             <TouchableOpacity
-              style={styles.unitToggle}
+              style={[styles.unitToggle, isDarkMode && styles.unitToggleDark]}
               onPress={() => setIsMiles(!isMiles)}
             >
-              <Text style={styles.unitToggleText}>{isMiles ? "Miles (mph)" : "Km (km/h)"}</Text>
+              <Text style={[styles.unitToggleText, isDarkMode && styles.textDark]}>{isMiles ? "Miles (mph)" : "Km (km/h)"}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Temperature</Text>
-              <Text style={styles.rowSub}>Weather and battery pack thermal readings</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Temperature</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Weather and battery pack thermal readings</Text>
             </View>
             <TouchableOpacity
-              style={styles.unitToggle}
+              style={[styles.unitToggle, isDarkMode && styles.unitToggleDark]}
               onPress={() => setIsFahrenheit(!isFahrenheit)}
             >
-              <Text style={styles.unitToggleText}>{isFahrenheit ? "°Fahrenheit" : "°Celsius"}</Text>
+              <Text style={[styles.unitToggleText, isDarkMode && styles.textDark]}>{isFahrenheit ? "°Fahrenheit" : "°Celsius"}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
 
           <TouchableOpacity
             style={styles.navRow}
             onPress={handleClearCache}
           >
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Clear Offline Cache</Text>
-              <Text style={styles.rowSub}>Free up local storage (42.8 MB)</Text>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Clear Offline Cache</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>Free up local storage (42.8 MB)</Text>
             </View>
-            <ChevronRightIcon size={18} color="#a1a1aa" />
+            <ChevronRightIcon size={18} color={isDarkMode ? "#9ca3af" : "#a1a1aa"} />
           </TouchableOpacity>
         </View>
 
@@ -419,6 +443,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+  },
+  containerDark: {
+    backgroundColor: "#090a0f",
+  },
+  headerDark: {
+    borderBottomColor: "#1a1d27",
+  },
+  backBtnDark: {
+    backgroundColor: "#161922",
+    borderColor: "#262b3a",
+  },
+  cardDark: {
+    backgroundColor: "#12141c",
+    borderColor: "#222736",
+  },
+  textDark: {
+    color: "#f3f4f6",
+  },
+  subTextDark: {
+    color: "#9ca3af",
+  },
+  dividerDark: {
+    backgroundColor: "#1c202d",
+  },
+  unitToggleDark: {
+    backgroundColor: "#1c202d",
+    borderColor: "#2a3044",
   },
 });
 

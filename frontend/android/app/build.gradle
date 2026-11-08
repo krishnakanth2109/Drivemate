@@ -11,6 +11,7 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 react {
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
     reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('hermes-compiler/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/hermesc/%OS-BIN%/hermesc"
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
 
     enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
@@ -63,16 +64,9 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
+ * Set this to true in release builds to optimize the app using [R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization).
  */
-def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
-
-/**
- * Play permissions locked to the 6.5.2 set:
- * COARSE/FINE location + FOREGROUND_SERVICE + FOREGROUND_SERVICE_HEALTH (D2D steps).
- * Do NOT add ACCESS_BACKGROUND_LOCATION / FOREGROUND_SERVICE_LOCATION /
- * FOREGROUND_SERVICE_MEDIA_PLAYBACK — stripped via AndroidManifest + app.json blockedPermissions.
- */
+def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -93,32 +87,17 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.drivemate.app'
+    namespace 'com.drivemate.live'
     defaultConfig {
-        applicationId 'com.drivemate.app'
-        minSdkVersion Math.max(26, rootProject.ext.minSdkVersion ?: 26)
+        applicationId 'com.drivemate.live'
+        minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 211
         versionName "7.0.8"
-        
-        // Memory management settings
-        multiDexEnabled true
-        vectorDrawables.useSupportLibrary = true
-        
-        // 16KB page size support
-        // ndk {
-        //     abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-        // }
+
+        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
-        release {
-            if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
-                storeFile file(MYAPP_UPLOAD_STORE_FILE)
-                storePassword MYAPP_UPLOAD_STORE_PASSWORD
-                keyAlias MYAPP_UPLOAD_KEY_ALIAS
-                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
-            }
-        }
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
@@ -129,30 +108,24 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
-            // Memory optimization for debug builds
-            minifyEnabled false
-            shrinkResources false
-            debuggable true
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.release   
-            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
-            minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            crunchPngs (findProperty('android.enablePngCrunchInReleaseBuilds')?.toBoolean() ?: true)
+            signingConfig signingConfigs.debug
+            def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
+            shrinkResources enableShrinkResources.toBoolean()
+            minifyEnabled enableMinifyInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
+            crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
+            def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
+            useLegacyPackaging enableLegacyPackaging.toBoolean()
         }
-        // Explicitly declare support for 16KB page sizes
-        // doNotStrip "*/arm64-v8a/lib*"
-        // doNotStrip "*/armeabi-v7a/lib*"
-        // doNotStrip "*/x86/lib*"
-        // doNotStrip "*/x86_64/lib*"
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
@@ -201,30 +174,9 @@ dependencies {
         }
     }
 
-    // Force Fresco WebP support for all builds (feed uses .webp).
-    // Some devices/builds still throw "unknown image format" without explicit inclusion.
-    implementation("com.facebook.fresco:webpsupport:${expoLibs.versions.fresco.get()}")
-    implementation("com.facebook.fresco:animated-webp:${expoLibs.versions.fresco.get()}")
-
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
-    }
-}
-
-apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'
-
-// App CMake (New Arch) runs before some libs finish codegen → missing
-// .../build/generated/source/codegen/jni (health-connect, nitro-modules on CI).
-afterEvaluate {
-    tasks.matching { it.name.startsWith("configureCMake") }.configureEach { cmakeTask ->
-        rootProject.allprojects.each { proj ->
-            def codegen = proj.tasks.findByName("generateCodegenArtifactsFromSchema")
-            if (codegen != null) {
-                cmakeTask.dependsOn(codegen)
-            }
-        }
     }
 }

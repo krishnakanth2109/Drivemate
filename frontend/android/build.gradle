@@ -6,136 +6,18 @@ buildscript {
     mavenCentral()
   }
   dependencies {
-        classpath 'com.google.gms:google-services:4.4.1'
-    classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.3'
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
-    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+    def kotlinVersion = findProperty('android.kotlinVersion')
+    classpath(kotlinVersion ? "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion" : 'org.jetbrains.kotlin:kotlin-gradle-plugin')
   }
 }
-
-def reactNativeAndroidDir = new File(
-  providers.exec {
-    workingDir(rootDir)
-    commandLine("node", "--print", "require.resolve('react-native/package.json')")
-  }.standardOutput.asText.get().trim(),
-  "../android"
-)
 
 allprojects {
   repositories {
-    maven {
-      // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-      url(reactNativeAndroidDir)
-    }
-
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
-  }
-}
-
-// Force 16 KB page-size compatible native dependencies for Play compliance.
-subprojects { subproject ->
-  subproject.configurations.configureEach { configuration ->
-    configuration.resolutionStrategy {
-      // Align Kotlin runtime with Expo/RN (kotlinVersion 2.1.20). Pin to 2.1.20 so
-      // transitive 2.2.x does not cause metadata mismatches (expo-dev-launcher needs 2.1+).
-      force "org.jetbrains.kotlin:kotlin-stdlib:2.1.20"
-      force "org.jetbrains.kotlin:kotlin-stdlib-common:2.1.20"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.20"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20"
-      force "org.jetbrains.kotlin:kotlin-reflect:2.1.20"
-      // Ads 25.4.0 is compiled with Kotlin 2.3; this app is pinned to Kotlin 2.1.20.
-      force "com.google.android.gms:play-services-ads:24.9.0"
-      force "io.legere:pdfiumandroid:1.0.33"
-      force "org.videolan.android:libvlc-all:3.6.3"
-      eachDependency { details ->
-        if (details.requested.group == "androidx.media3") {
-          details.useVersion "1.9.0"
-          details.because "Align Media3 with Expo SDK 56 (expo-video/expo-camera) and patched react-native-video"
-        }
-        // Pin only the AdMob SDK, not play-services-ads-identifier (different version line).
-        if (details.requested.group == "com.google.android.gms" &&
-            (details.requested.name == "play-services-ads" ||
-             details.requested.name == "play-services-ads-api")) {
-          details.useVersion "24.9.0"
-          details.because "play-services-ads 25.4.0 needs Kotlin 2.3; keep 24.9.0 for Kotlin 2.1.20"
-        }
-      }
-    }
-  }
-}
-
-// Fix react-native-sms-user-consent: requires compileSdkVersion 30+ for Java 9+ source
-subprojects { subproject ->
-  if (subproject.name == 'react-native-sms-user-consent') {
-    subproject.afterEvaluate {
-      subproject.android {
-        compileSdkVersion rootProject.ext.compileSdkVersion ?: 35
-        buildToolsVersion rootProject.ext.buildToolsVersion ?: "35.0.0"
-        defaultConfig {
-          minSdkVersion rootProject.ext.minSdkVersion ?: 26
-        }
-      }
-    }
-  }
-}
-
-// Expo SDK 56: native modules link against react-native-worklets prefab/native libs.
-// Ensure worklets CMake + prefab artifacts exist before dependent native builds run.
-subprojects { subproject ->
-  def workletsProject = rootProject.findProject(':react-native-worklets')
-  if (workletsProject == null) {
-    return
-  }
-
-  if (subproject.name == 'expo-modules-core' || subproject.name == 'react-native-reanimated') {
-    subproject.afterEvaluate {
-      // startsWith('buildCMake') also matched RelWithDebInfo and forced a full
-      // worklets *Debug* native build during every Release/AAB CI run (~minutes + RAM).
-      subproject.tasks.matching { it.name.contains('buildCMakeDebug') }.configureEach { task ->
-        task.dependsOn workletsProject.tasks.named('buildCMakeDebug')
-        task.dependsOn workletsProject.tasks.named('prefabDebugPackage')
-        task.dependsOn workletsProject.tasks.named('mergeDebugNativeLibs')
-      }
-
-      subproject.tasks.matching { it.name.contains('buildCMakeRelWithDebInfo') }.configureEach { task ->
-        task.dependsOn workletsProject.tasks.named('buildCMakeRelWithDebInfo')
-        task.dependsOn workletsProject.tasks.named('prefabReleasePackage')
-        task.dependsOn workletsProject.tasks.named('mergeReleaseNativeLibs')
-      }
-    }
-  }
-}
-
-// GitHub Actions: CMake object trees under .cxx can exhaust the runner disk before
-// packageReleaseBundle. After .so libs are merged, those objects are disposable.
-if (System.getenv("GITHUB_ACTIONS") == "true") {
-  gradle.projectsEvaluated {
-    def appProject = rootProject.findProject(":app")
-    if (appProject == null) {
-      return
-    }
-    appProject.tasks.matching { it.name == "mergeReleaseNativeLibs" }.configureEach { task ->
-      task.doLast {
-        def toDelete = [new File(rootProject.projectDir, "app/.cxx")]
-        def nodeModules = new File(rootProject.projectDir, "../node_modules")
-        if (nodeModules.exists()) {
-          nodeModules.eachFileRecurse(groovy.io.FileType.DIRECTORIES) { dir ->
-            if (dir.name == ".cxx") {
-              toDelete << dir
-            }
-          }
-        }
-        toDelete.unique().each { dir ->
-          if (dir.exists()) {
-            println "[ci] Freeing disk after mergeReleaseNativeLibs: ${dir}"
-            dir.deleteDir()
-          }
-        }
-      }
-    }
   }
 }
 

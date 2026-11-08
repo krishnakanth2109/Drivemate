@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   AUTH_TOKEN: "@drivemate_auth_token",
   USER_PROFILE: "@drivemate_user_profile",
   POST_QUOTA: "@drivemate_post_quota",
+  THEME_MODE: "@drivemate_theme_mode",
 };
 
 export interface StoredUserProfile {
@@ -118,6 +119,30 @@ export async function clearAuthSession(): Promise<void> {
   }
 }
 
+/**
+ * Persist dark mode theme setting
+ */
+export async function saveThemeMode(isDark: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.THEME_MODE, isDark ? "dark" : "light");
+  } catch (error) {
+    console.error("❌ [Storage] Failed to save theme mode:", error);
+  }
+}
+
+/**
+ * Get dark mode theme setting
+ */
+export async function getThemeMode(): Promise<boolean> {
+  try {
+    const mode = await AsyncStorage.getItem(STORAGE_KEYS.THEME_MODE);
+    return mode === "dark";
+  } catch (error) {
+    console.error("❌ [Storage] Failed to get theme mode:", error);
+    return false;
+  }
+}
+
 export default {
   saveAuthToken,
   getAuthToken,
@@ -125,5 +150,7 @@ export default {
   saveUserProfile,
   getUserProfile,
   clearAuthSession,
+  saveThemeMode,
+  getThemeMode,
 };
 

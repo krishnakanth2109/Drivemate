@@ -43,11 +43,11 @@ app-example
 # --- EAS Build: exclude local artifacts (not needed on EAS servers) ---
 
 # Android build outputs & caches
-android/app/build/
-android/build/
-android/.gradle/
-android/app/.cxx/
-android/local.properties
+**/build/
+**/.cxx/
+**/.gradle/
+**/local.properties
+local.properties
 *.apk
 *.aab
 

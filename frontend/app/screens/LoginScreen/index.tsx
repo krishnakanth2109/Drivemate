@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -119,7 +120,11 @@ const LoginScreen: React.FC = () => {
           {/* Brand Header */}
           <View style={styles.brandSection}>
             <View style={styles.logoPill}>
-              <View style={styles.logoInnerSquare} />
+              <Image
+                source={require("../../../assets/images/App_icon.png")}
+                style={styles.logoBadgeImg}
+                resizeMode="cover"
+              />
               <Text style={styles.logoText}>DRIVEMATE</Text>
             </View>
             <Text style={styles.headline}>Welcome back</Text>
@@ -352,6 +357,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e4e4e7",
     marginBottom: 24,
+  },
+  logoBadgeImg: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
   },
   logoInnerSquare: {
     width: 8,

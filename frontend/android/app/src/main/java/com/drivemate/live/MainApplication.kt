@@ -1,18 +1,17 @@
-package com.xitarabuild.mytdp
+package com.drivemate.live
+import com.facebook.react.common.assets.ReactFontManager
 
-import android.app.ActivityManager
 import android.app.Application
-import android.content.Context
 import android.content.res.Configuration
-import android.os.Build
+
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
+import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
+import com.facebook.react.ReactPackage
 import com.facebook.react.ReactHost
 import com.facebook.react.common.ReleaseLevel
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.releaseLevel
-import com.facebook.react.soloader.OpenSourceMergedSoMapping
-import com.facebook.soloader.SoLoader
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
+
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 
@@ -34,22 +33,12 @@ class MainApplication : Application(), ReactApplication {
     // @generated begin xml-fonts-init - expo prebuild (DO NOT MODIFY) sync-da39a3ee5e6b4b0d3255bfef95601890afd80709
 
     // @generated end xml-fonts-init
-    releaseLevel = ReleaseLevel.STABLE
-    SoLoader.init(this, OpenSourceMergedSoMapping)
-    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-      load()
+    DefaultNewArchitectureEntryPoint.releaseLevel = try {
+      ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
+    } catch (e: IllegalArgumentException) {
+      ReleaseLevel.STABLE
     }
-
-    // Memory optimization
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-      val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-      val memInfo = ActivityManager.MemoryInfo()
-      activityManager.getMemoryInfo(memInfo)
-      if (memInfo.lowMemory) {
-        System.gc()
-      }
-    }
-
+    loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }
 

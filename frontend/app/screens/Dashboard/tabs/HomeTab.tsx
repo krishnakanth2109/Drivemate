@@ -414,11 +414,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
         {/* Feed Section Title */}
         <View style={styles.feedHeader}>
           <Text style={styles.feedTitle}>Community Feed</Text>
-          <Text style={styles.feedCount}>{posts.length} posts</Text>
+          <Text style={styles.feedCount}>{posts.slice(0, 5).length} posts</Text>
         </View>
 
         {/* Posts List */}
-        {posts.map((post) => {
+        {posts.slice(0, 5).map((post) => {
           const isPostAuthorSelf =
             post.author.toLowerCase() === userName.toLowerCase() ||
             post.authorTag.toLowerCase() === `@${userName.toLowerCase().replace(/\s+/g, "_")}`;

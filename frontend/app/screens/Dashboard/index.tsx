@@ -228,7 +228,11 @@ const Dashboard: React.FC = () => {
         <View style={styles.headerLeft}>
           <View style={styles.brandContainer}>
             <View style={styles.logoPill}>
-              <Text style={styles.logoPillText}>DM</Text>
+              <Image
+                source={require("../../../assets/images/App_icon.png")}
+                style={styles.logoImg}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.brandTitle}>Drivemate</Text>
           </View>
@@ -348,9 +352,15 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: "#09090b",
+    backgroundColor: "#090724",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  logoImg: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
   },
   logoPillText: {
     color: "#ffffff",

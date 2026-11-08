@@ -1,10 +1,8 @@
-package com.xitarabuild.mytdp
+package com.drivemate.live
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
-import android.app.ActivityManager
-import android.content.Context
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -22,19 +20,6 @@ class MainActivity : ReactActivity() {
     // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a738c56c9a6119210cb55f0b613eb8b6af
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
-    
-    // Memory optimization
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-      val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-      val memInfo = ActivityManager.MemoryInfo()
-      activityManager.getMemoryInfo(memInfo)
-      
-      // If memory is low, clear some caches
-      if (memInfo.lowMemory) {
-        System.gc()
-      }
-    }
-    
     super.onCreate(null)
   }
 

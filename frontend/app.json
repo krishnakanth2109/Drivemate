@@ -2,7 +2,7 @@
   "expo": {
     "name": "Drivemate",
     "slug": "drivemate",
-    "version": "1.0.0",
+    "version": "7.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/App_icon.png",
     "scheme": "drivemate",
@@ -19,16 +19,16 @@
           "_http._tcp"
         ]
       },
-      "bundleIdentifier": "com.drivemate.app",
-      "version": "1.0.0",
-      "buildNumber": "1"
+      "bundleIdentifier": "com.drivemate.live",
+      "version": "7.0.8",
+      "buildNumber": "211"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 1,
+      "versionCode": 211,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/App_icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#050831"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -38,7 +38,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.drivemate.app"
+      "package": "com.drivemate.live"
     },
     "plugins": [
       [
@@ -69,7 +69,7 @@
         {
           "android": {
             "minSdkVersion": 26,
-            "compileSdkVersion": 36,
+            "compileSdkVersion": 37,
             "targetSdkVersion": 36,
             "usesCleartextTraffic": true,
             "supportsPageSizes16KB": true
@@ -81,6 +81,11 @@
       ],
       "expo-status-bar",
       "expo-video"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "940f7573-eed2-4dd0-970e-dee66193b4cd"
+      }
+    }
   }
 }
