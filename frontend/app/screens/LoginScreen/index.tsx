@@ -37,6 +37,7 @@ const LoginScreen: React.FC = () => {
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPassFocused, setIsPassFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const emailInputRef = useRef<any>(null);
   const passwordInputRef = useRef<any>(null);
 
   // Google Sign-In State
@@ -153,8 +154,7 @@ const LoginScreen: React.FC = () => {
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
           bounces={false}
           overScrollMode="never"
@@ -180,7 +180,9 @@ const LoginScreen: React.FC = () => {
             {/* Email Field */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email address</Text>
-              <View
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => emailInputRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   isEmailFocused && styles.inputWrapperFocused,
@@ -190,6 +192,7 @@ const LoginScreen: React.FC = () => {
                   <MailIcon size={18} color={isEmailFocused ? "#09090b" : "#a1a1aa"} />
                 </View>
                 <TextInput
+                  ref={emailInputRef}
                   style={styles.textInput}
                   placeholder="name@example.com"
                   placeholderTextColor="#a1a1aa"
@@ -203,7 +206,7 @@ const LoginScreen: React.FC = () => {
                   onFocus={() => setIsEmailFocused(true)}
                   onBlur={() => setIsEmailFocused(false)}
                 />
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Password Field */}
@@ -217,7 +220,9 @@ const LoginScreen: React.FC = () => {
                   <Text style={styles.forgotPassword}>Forgot password?</Text>
                 </TouchableOpacity>
               </View>
-              <View
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => passwordInputRef.current?.focus()}
                 style={[
                   styles.inputWrapper,
                   isPassFocused && styles.inputWrapperFocused,
@@ -248,7 +253,7 @@ const LoginScreen: React.FC = () => {
                     {showPassword ? "Hide" : "Show"}
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Sign In Primary Action */}
@@ -465,11 +470,6 @@ const styles = StyleSheet.create({
   inputWrapperFocused: {
     borderColor: "#09090b",
     backgroundColor: "#ffffff",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   inputIconContainer: {
     marginRight: 10,
@@ -555,8 +555,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: "auto",
-    paddingTop: 28,
+    marginTop: 28,
+    paddingTop: 8,
   },
   footerText: {
     fontSize: 13,

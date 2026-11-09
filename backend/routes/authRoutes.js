@@ -11,6 +11,7 @@ import {
   updateProfile,
   logout,
   deleteAccount,
+  resendVerificationEmail,
 } from '../controllers/authController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
@@ -23,6 +24,8 @@ router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', forgotPassword);
+router.post('/resend-verification', requireAuth, resendVerificationEmail);
+router.post('/send-verification-email', resendVerificationEmail);
 router.get('/verify', requireAuth, verifyToken);
 router.get('/profile', requireAuth, getProfile);
 router.put('/profile', requireAuth, updateProfile);

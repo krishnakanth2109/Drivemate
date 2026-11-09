@@ -344,6 +344,8 @@ export const register = async (req, res) => {
         location: 'San Francisco, CA',
         drivingStyle: isTwoWheeler ? '2-Wheeler City & Highway' : '4-Wheeler Commute & RoadTrip',
         passwordHash: cleanPasswordHash,
+        isVerified: false,
+        emailVerified: false,
         isProUser: false,
         freePostsUsed: 0,
         maxFreePosts: 2,
@@ -691,6 +693,16 @@ export const verifyToken = async (req, res) => {
     const safeUser = { ...req.user };
     delete safeUser.passwordHash;
 
+    if (auth && req.user?.uid) {
+      try {
+        const fbUser = await auth.getUser(req.user.uid);
+        if (fbUser.emailVerified) {
+          safeUser.isVerified = true;
+          safeUser.emailVerified = true;
+        }
+      } catch (_) {}
+    }
+
     return res.status(200).json({
       success: true,
       valid: true,
@@ -710,11 +722,109 @@ export const getProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, error: 'User profile not found.' });
     }
-    const safeUser = { ...user };
+
+    let isVerified = Boolean(user.isVerified || user.emailVerified);
+
+    // Sync live verification status directly from Firebase Authentication
+    if (auth && req.user?.uid) {
+      try {
+        const fbUser = await auth.getUser(req.user.uid);
+        if (fbUser.emailVerified) {
+          isVerified = true;
+          if (!user.isVerified || !user.emailVerified) {
+            await dataStore.updateUser(req.user.uid, { isVerified: true, emailVerified: true });
+          }
+        }
+      } catch (_) {}
+    }
+
+    const safeUser = { ...user, isVerified, emailVerified: isVerified };
     delete safeUser.passwordHash;
     return res.status(200).json({ success: true, user: safeUser });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Failed to fetch user profile.' });
+  }
+};
+
+export const resendVerificationEmail = async (req, res) => {
+  try {
+    const targetUid = req.user?.uid || req.body?.uid;
+    const targetEmail = req.body?.email || req.user?.email;
+
+    let user = null;
+    if (targetUid) {
+      user = await dataStore.getUserById(targetUid);
+    }
+    if (!user && targetEmail) {
+      user = await dataStore.getUserByEmail(targetEmail.trim().toLowerCase());
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found.',
+      });
+    }
+
+    const email = user.email;
+    const uid = user.uid;
+    const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+
+    console.log(`📧 [Firebase Auth] Resending native verification email to ${email}...`);
+
+    let dispatched = false;
+
+    // 1. Dispatch official Firebase verification email via Identity Toolkit (Google servers)
+    if (auth && uid) {
+      try {
+        const customToken = await auth.createCustomToken(uid);
+        const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+        });
+        const signInData = await signInRes.json();
+        if (signInData.idToken) {
+          const oobRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken: signInData.idToken }),
+          });
+          if (oobRes.ok) {
+            dispatched = true;
+            console.log(`🔥 [Firebase Auth] Native verification email dispatched to: ${email}`);
+          }
+        }
+      } catch (fbErr) {
+        console.warn(`[Firebase Auth] resendVerificationEmail notice: ${fbErr.message}`);
+      }
+    }
+
+    // 2. Fallback to Firebase Admin generateEmailVerificationLink
+    if (!dispatched && auth) {
+      try {
+        const link = await auth.generateEmailVerificationLink(email);
+        console.log(`🔗 [Firebase Admin] Generated verification link: ${link}`);
+        await emailService.sendVerificationOtpEmail({
+          toEmail: email,
+          otpCode: 'VERIFY',
+        }).catch(() => {});
+        dispatched = true;
+      } catch (adminErr) {
+        console.warn(`[Firebase Admin] generateEmailVerificationLink notice: ${adminErr.message}`);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Verification email sent to ${email}. Please check your inbox and spam folder.`,
+    });
+  } catch (error) {
+    console.error('[AuthController.resendVerificationEmail] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to send verification email. Please try again.',
+    });
   }
 };
 

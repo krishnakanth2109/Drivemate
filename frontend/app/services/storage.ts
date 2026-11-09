@@ -23,6 +23,8 @@ export interface StoredUserProfile {
   maxFreePosts: number;
   singlePasses: number;
   vehicles?: any[];
+  isVerified?: boolean;
+  emailVerified?: boolean;
 }
 
 /**

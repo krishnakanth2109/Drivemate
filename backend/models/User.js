@@ -26,6 +26,8 @@ const userSchema = new mongoose.Schema({
   drivingStyle: { type: String, default: 'commute' },
   passwordHash: { type: String, default: '' },
   activeToken: { type: String, index: true },
+  isVerified: { type: Boolean, default: false },
+  emailVerified: { type: Boolean, default: false },
   isProUser: { type: Boolean, default: false },
   freePostsUsed: { type: Number, default: 0 },
   maxFreePosts: { type: Number, default: 2 },

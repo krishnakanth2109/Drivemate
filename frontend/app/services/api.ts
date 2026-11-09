@@ -343,6 +343,17 @@ export const authAPI = {
   },
 
   /**
+   * Resend native Firebase email verification link
+   */
+  async resendVerificationEmail(email?: string) {
+    return await request<{ message: string }>("/auth/resend-verification", {
+      method: "POST",
+      requiresAuth: true,
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
    * Get user profile
    */
   async getProfile() {

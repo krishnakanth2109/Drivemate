@@ -28,6 +28,8 @@ import {
   PlusIcon,
   TrashIcon,
   PlayIcon,
+  MailIcon,
+  ShieldIcon,
 } from "../../../components/Icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BallGame from "../../../components/BallGame";
@@ -62,6 +64,54 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isGameOpen, setIsGameOpen] = useState<boolean>(false);
   const [highScore, setHighScore] = useState<number>(0);
+  const [isResendingEmail, setIsResendingEmail] = useState<boolean>(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState<boolean>(false);
+
+  const handleResendVerification = async () => {
+    setIsResendingEmail(true);
+    try {
+      const res = await authAPI.resendVerificationEmail(displayEmail);
+      if (res.success) {
+        Alert.alert(
+          "Verification Email Sent! 📩",
+          `Google has dispatched a verification link to ${displayEmail}.\n\nPlease open your email app and click the link to verify your account. If you don't see it, be sure to check your Spam folder.`,
+          [{ text: "Got it" }]
+        );
+      } else {
+        Alert.alert("Notice", res.error || "Unable to send verification link at this moment.");
+      }
+    } catch (err: any) {
+      Alert.alert("Notice", err.message || "Failed to contact verification service.");
+    } finally {
+      setIsResendingEmail(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setIsCheckingVerification(true);
+    try {
+      const profileRes = await authAPI.getProfile();
+      if (profileRes.success && profileRes.user) {
+        setProfile(profileRes.user);
+        if (profileRes.user.isVerified || profileRes.user.emailVerified) {
+          Alert.alert("Verified! 🎉", "Your email is officially verified. Welcome aboard as a verified Drivemate driver!");
+        } else {
+          Alert.alert(
+            "Pending Verification",
+            `We have not received verification for ${displayEmail} yet. Please check your inbox and tap the link Google sent you, then tap 'Check Status' again.`,
+            [
+              { text: "Resend Email", onPress: handleResendVerification },
+              { text: "OK" },
+            ]
+          );
+        }
+      }
+    } catch {
+      Alert.alert("Notice", "Unable to refresh verification status. Please check your network connection.");
+    } finally {
+      setIsCheckingVerification(false);
+    }
+  };
 
   useEffect(() => {
     async function loadHighScore() {
@@ -157,6 +207,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const displayEmail = profile?.email || fallbackEmail || "";
   const displayUsername = profile?.username ? `@${profile.username}` : "@driver";
   const avatarUrl = profile?.profilePicture || profile?.photoUrl || userAvatar;
+  const isVerified = Boolean(profile?.isVerified || profile?.emailVerified);
 
   // Primary vehicle
   const primaryVehicle = vehicles.find((v) => v.isPrimary) || vehicles[0] || null;
@@ -199,9 +250,27 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         <Text style={styles.name}>{displayName}</Text>
         <Text style={styles.email}>{displayEmail}</Text>
 
-        <View style={styles.planBadge}>
-          <SparklesIcon size={12} color="#09090b" />
-          <Text style={styles.planBadgeText}>COMMUNITY MEMBER</Text>
+        <View style={styles.badgeRow}>
+          <View style={styles.planBadge}>
+            <SparklesIcon size={12} color="#09090b" />
+            <Text style={styles.planBadgeText}>COMMUNITY MEMBER</Text>
+          </View>
+
+          {isVerified ? (
+            <View style={styles.verifiedBadge}>
+              <CheckCircleIcon size={12} color="#16a34a" />
+              <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.unverifiedBadge}
+              onPress={handleCheckVerification}
+              activeOpacity={0.7}
+            >
+              <ShieldIcon size={12} color="#d97706" />
+              <Text style={styles.unverifiedBadgeText}>UNVERIFIED</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Live Backend Stats Row */}
@@ -235,6 +304,51 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Unverified Email Action Banner */}
+      {!isVerified && (
+        <View style={styles.unverifiedBanner}>
+          <View style={styles.unverifiedBannerTop}>
+            <View style={styles.unverifiedIconCircle}>
+              <MailIcon size={16} color="#d97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.unverifiedBannerTitle}>Check your email for verification</Text>
+              <Text style={styles.unverifiedBannerText}>
+                We sent a verification link to <Text style={{ fontWeight: "700" }}>{displayEmail || "your email"}</Text>. Please click the link to verify your driver account.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.unverifiedActionRow}>
+            <TouchableOpacity
+              style={styles.resendActionBtn}
+              onPress={handleResendVerification}
+              disabled={isResendingEmail}
+              activeOpacity={0.8}
+            >
+              {isResendingEmail ? (
+                <ActivityIndicator size="small" color="#92400e" />
+              ) : (
+                <Text style={styles.resendActionBtnText}>Resend Email</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.verifyCheckBtn}
+              onPress={handleCheckVerification}
+              disabled={isCheckingVerification}
+              activeOpacity={0.8}
+            >
+              {isCheckingVerification ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.verifyCheckBtnText}>Check Status</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Primary Vehicle Quick Card (Fetched from Backend Garage) */}
       <TouchableOpacity
@@ -542,6 +656,14 @@ const styles = StyleSheet.create({
     color: "#71717a",
     marginBottom: 12,
   },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 18,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
   planBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -552,13 +674,120 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
-    marginBottom: 20,
   },
   planBadgeText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#18181b",
     letterSpacing: 0.5,
+  },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#dcfce7",
+    borderWidth: 1,
+    borderColor: "#86efac",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803d",
+    letterSpacing: 0.5,
+  },
+  unverifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  unverifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#b45309",
+    letterSpacing: 0.5,
+  },
+  unverifiedBanner: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#fde68a",
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#f59e0b",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  unverifiedBannerTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
+  unverifiedIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  unverifiedBannerTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#92400e",
+    marginBottom: 3,
+  },
+  unverifiedBannerText: {
+    fontSize: 12,
+    color: "#b45309",
+    lineHeight: 18,
+  },
+  unverifiedActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 4,
+  },
+  resendActionBtn: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resendActionBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#92400e",
+  },
+  verifyCheckBtn: {
+    flex: 1,
+    backgroundColor: "#09090b",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verifyCheckBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#ffffff",
   },
   statsRow: {
     flexDirection: "row",
