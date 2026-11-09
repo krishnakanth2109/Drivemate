@@ -4,6 +4,11 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import { auth } from './config/firebase.js';
 import { connectMongoDB, mongoose } from './config/mongodb.js';
@@ -44,6 +49,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Initialize backend services
 await asyncStorage.init();
@@ -117,6 +123,15 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/media', mediaRoutes);
+
+// Privacy Policy Webpage (Required by Google Play Console)
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
+app.get('/api/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
 
 // Root Welcome Endpoint
 app.get('/', (req, res) => {

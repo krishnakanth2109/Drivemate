@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -37,6 +37,7 @@ const LoginScreen: React.FC = () => {
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPassFocused, setIsPassFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const passwordInputRef = useRef<any>(null);
 
   // Google Sign-In State
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
@@ -68,6 +69,43 @@ const LoginScreen: React.FC = () => {
       console.error("❌ [LoginScreen handleLogin] Exception:", err);
       Alert.alert("Sign In Error", err.message || "Failed to connect to authentication server.");
     }
+  };
+
+  const handleForgotPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail || !targetEmail.includes("@")) {
+      Alert.alert(
+        "Email Required",
+        "Please enter your registered email address in the Email field above, then tap 'Forgot password?'."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Reset Password",
+      `Dispatch an official Firebase password reset link to:\n\n${targetEmail}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send Reset Link",
+          onPress: async () => {
+            try {
+              const res = await authAPI.forgotPassword(targetEmail);
+              if (res.success) {
+                Alert.alert(
+                  "Password Reset Dispatched",
+                  `A secure password reset email has been dispatched to ${targetEmail}. Please check your inbox and spam folder.`
+                );
+              } else {
+                Alert.alert("Notice", res.error || "Unable to dispatch reset email. Please try again.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to dispatch reset email.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const executeGoogleLogin = async (targetEmail: string, displayName?: string) => {
@@ -110,12 +148,16 @@ const LoginScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        enabled={Platform.OS === "ios"}
         style={styles.keyboardView}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
         >
           {/* Brand Header */}
           <View style={styles.brandSection}>
@@ -156,6 +198,8 @@ const LoginScreen: React.FC = () => {
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
                   onFocus={() => setIsEmailFocused(true)}
                   onBlur={() => setIsEmailFocused(false)}
                 />
@@ -167,12 +211,8 @@ const LoginScreen: React.FC = () => {
               <View style={styles.passwordHeader}>
                 <Text style={styles.inputLabel}>Password</Text>
                 <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      "Reset Password",
-                      "Password reset dispatch has been logged for this account."
-                    )
-                  }
+                  onPress={handleForgotPassword}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.forgotPassword}>Forgot password?</Text>
                 </TouchableOpacity>
@@ -187,6 +227,7 @@ const LoginScreen: React.FC = () => {
                   <LockIcon size={18} color={isPassFocused ? "#09090b" : "#a1a1aa"} />
                 </View>
                 <TextInput
+                  ref={passwordInputRef}
                   style={styles.textInput}
                   placeholder="Enter your password"
                   placeholderTextColor="#a1a1aa"
@@ -194,6 +235,8 @@ const LoginScreen: React.FC = () => {
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
                   onFocus={() => setIsPassFocused(true)}
                   onBlur={() => setIsPassFocused(false)}
                 />
@@ -338,9 +381,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 28,
-    paddingTop: Platform.OS === "ios" ? 24 : 36,
-    paddingBottom: 32,
-    justifyContent: "space-between",
+    paddingTop: Platform.OS === "ios" ? 20 : 32,
+    paddingBottom: 36,
   },
   brandSection: {
     alignItems: "flex-start",
@@ -438,7 +480,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: "#09090b",
-    height: "100%",
+    height: 48,
+    paddingVertical: 0,
   },
   toggleBtn: {
     paddingVertical: 6,
@@ -512,7 +555,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 24,
+    marginTop: "auto",
+    paddingTop: 28,
   },
   footerText: {
     fontSize: 13,

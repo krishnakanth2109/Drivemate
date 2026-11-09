@@ -5,6 +5,7 @@ import {
   googleAuth,
   sendOtp,
   verifyOtp,
+  forgotPassword,
   verifyToken,
   getProfile,
   updateProfile,
@@ -20,6 +21,8 @@ router.post('/login', login);
 router.post('/google', googleAuth);
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', forgotPassword);
 router.get('/verify', requireAuth, verifyToken);
 router.get('/profile', requireAuth, getProfile);
 router.put('/profile', requireAuth, updateProfile);

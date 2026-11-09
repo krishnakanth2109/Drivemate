@@ -194,6 +194,60 @@ export const emailService = {
       return { success: false, error: err.message };
     }
   },
+
+  /**
+   * Send password reset email with secure Firebase link
+   */
+  async sendPasswordResetEmail({ toEmail, resetLink, recipientName }) {
+    if (!toEmail) return { success: false, reason: 'No email' };
+
+    const subject = `🔑 Reset Your Drivemate Password`;
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e4e4e7; border-radius: 16px; background-color: #ffffff;">
+        <div style="background-color: #09090b; padding: 12px 18px; border-radius: 10px; display: inline-block; margin-bottom: 20px;">
+          <span style="color: #ffffff; font-weight: 800; font-size: 16px; letter-spacing: 1px;">DRIVEMATE</span>
+        </div>
+        <h2 style="color: #09090b; font-size: 22px; margin-top: 0; font-weight: 800;">Password Reset Request</h2>
+        <p style="color: #3f3f46; font-size: 15px; line-height: 24px;">
+          Hi <strong>${recipientName || 'Driver'}</strong>,
+        </p>
+        <p style="color: #3f3f46; font-size: 15px; line-height: 24px;">
+          We received a request to reset your Drivemate account password. Click the button below to choose a new password:
+        </p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${resetLink}" style="display: inline-block; background-color: #09090b; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 28px; border-radius: 12px;">Reset Password →</a>
+        </div>
+        <p style="color: #71717a; font-size: 13px; line-height: 20px;">
+          If the button above does not work, copy and paste this link into your browser:<br>
+          <a href="${resetLink}" style="color: #2563eb; word-break: break-all;">${resetLink}</a>
+        </p>
+        <p style="color: #a1a1aa; font-size: 12px; line-height: 18px; margin-top: 24px; border-top: 1px solid #f4f4f5; padding-top: 16px;">
+          If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.
+        </p>
+      </div>
+    `;
+
+    try {
+      const mailer = getTransporter();
+      const fromAddress = process.env.EMAIL_FROM || '"Drivemate Security" <auth@drivemate.com>';
+      const info = await mailer.sendMail({
+        from: fromAddress,
+        to: toEmail,
+        subject,
+        html,
+        text: `Reset your Drivemate password by visiting: ${resetLink}`,
+      });
+
+      console.log(`📨 [Email Service] Password reset email sent to: ${toEmail}`, {
+        messageId: info.messageId,
+      });
+
+      return { success: true, messageId: info.messageId };
+    } catch (err) {
+      console.error(`❌ [Email Service] Failed to send password reset email to ${toEmail}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  },
 };
 
 export default emailService;

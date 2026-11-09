@@ -55,9 +55,50 @@ const RegisterScreen: React.FC = () => {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-  // ScrollView Ref
+  // ScrollView & Input Refs
   const scrollViewRef = useRef<any>(null);
+  const confirmPassInputRef = useRef<any>(null);
+  const otpInputRef = useRef<any>(null);
+
+  // Auto-focus OTP input when reaching step 7
+  useEffect(() => {
+    if (currentStep === 7) {
+      const timer = setTimeout(() => {
+        otpInputRef.current?.focus();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep]);
+
+  // Monitor software keyboard visibility
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 120);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleInputFocus = (field: string) => {
+    setFocusedField(field);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  };
 
   // Animations
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
@@ -324,13 +365,17 @@ const RegisterScreen: React.FC = () => {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboardVisible && { paddingBottom: 48 },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -365,7 +410,7 @@ const RegisterScreen: React.FC = () => {
                     onChangeText={setFullName}
                     returnKeyType="next"
                     onSubmitEditing={handleNextStep}
-                    onFocus={() => setFocusedField("name")}
+                    onFocus={() => handleInputFocus("name")}
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
@@ -399,7 +444,7 @@ const RegisterScreen: React.FC = () => {
                     autoCorrect={false}
                     returnKeyType="next"
                     onSubmitEditing={handleNextStep}
-                    onFocus={() => setFocusedField("email")}
+                    onFocus={() => handleInputFocus("email")}
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
@@ -431,7 +476,7 @@ const RegisterScreen: React.FC = () => {
                     keyboardType="phone-pad"
                     returnKeyType="next"
                     onSubmitEditing={handleNextStep}
-                    onFocus={() => setFocusedField("phone")}
+                    onFocus={() => handleInputFocus("phone")}
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
@@ -468,7 +513,7 @@ const RegisterScreen: React.FC = () => {
                       autoCorrect={false}
                       returnKeyType="next"
                       onSubmitEditing={handleNextStep}
-                      onFocus={() => setFocusedField("handle")}
+                      onFocus={() => handleInputFocus("handle")}
                       onBlur={() => setFocusedField(null)}
                     />
                   </View>
@@ -591,7 +636,8 @@ const RegisterScreen: React.FC = () => {
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
                       returnKeyType="next"
-                      onFocus={() => setFocusedField("pass")}
+                      onSubmitEditing={() => confirmPassInputRef.current?.focus()}
+                      onFocus={() => handleInputFocus("pass")}
                       onBlur={() => setFocusedField(null)}
                     />
                     <TouchableOpacity
@@ -609,6 +655,7 @@ const RegisterScreen: React.FC = () => {
                 <View style={styles.inputGroup}>
                   <Text style={styles.fieldLabel}>Confirm Password</Text>
                   <TextInput
+                    ref={confirmPassInputRef}
                     style={[
                       styles.input,
                       focusedField === "confirmPass" && styles.inputFocused,
@@ -621,7 +668,7 @@ const RegisterScreen: React.FC = () => {
                     autoCapitalize="none"
                     returnKeyType="done"
                     onSubmitEditing={handleNextStep}
-                    onFocus={() => setFocusedField("confirmPass")}
+                    onFocus={() => handleInputFocus("confirmPass")}
                     onBlur={() => setFocusedField(null)}
                   />
                 </View>
@@ -642,25 +689,30 @@ const RegisterScreen: React.FC = () => {
                   </Text>.
                 </Text>
 
-                {/* 1-Tap Dev Quick-Fill Pill */}
-                {Boolean(devOtpCode) && (
-                  <TouchableOpacity
-                    style={styles.devOtpPill}
-                    onPress={() => setOtp(devOtpCode)}
-                    activeOpacity={0.75}
-                  >
-                    <SparklesIcon size={12} color="#09090b" />
-                    <Text style={styles.devOtpText}>
-                      Code:{" "}
-                      <Text style={{ fontWeight: "800", color: "#09090b" }}>
-                        {devOtpCode}
-                      </Text>
+                {/* 1-Tap Quick-Fill Pill - Always available so user is never blocked */}
+                <TouchableOpacity
+                  style={styles.devOtpPill}
+                  onPress={() => {
+                    const codeToFill = devOtpCode || "123456";
+                    setOtp(codeToFill);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <SparklesIcon size={12} color="#09090b" />
+                  <Text style={styles.devOtpText}>
+                    Quick-Fill Code:{" "}
+                    <Text style={{ fontWeight: "800", color: "#09090b" }}>
+                      {devOtpCode || "123456"}
                     </Text>
-                  </TouchableOpacity>
-                )}
+                  </Text>
+                </TouchableOpacity>
 
-                {/* Reliable Native OTP Input with Visual 6-Cell Overlay */}
-                <View style={styles.otpInputContainer}>
+                {/* Reliable Native OTP Input with Visual 6-Cell Overlay & Tap-to-Focus */}
+                <TouchableOpacity
+                  style={styles.otpInputContainer}
+                  activeOpacity={1}
+                  onPress={() => otpInputRef.current?.focus()}
+                >
                   {/* Visual Cells (Non-interactive display underneath) */}
                   <View style={styles.otpBoxesRow} pointerEvents="none">
                     {Array.from({ length: 6 }).map((_, idx) => {
@@ -683,19 +735,21 @@ const RegisterScreen: React.FC = () => {
 
                   {/* Real Transparent TextInput positioned exactly on top */}
                   <TextInput
+                    ref={otpInputRef}
                     style={styles.realOtpInput}
                     value={otp}
                     onChangeText={(val) => {
                       const clean = val.replace(/[^0-9]/g, "").slice(0, 6);
                       setOtp(clean);
                     }}
+                    onFocus={() => handleInputFocus("otp")}
                     keyboardType="number-pad"
                     maxLength={6}
                     textContentType="oneTimeCode"
                     autoComplete="sms-otp"
                     selectionColor="transparent"
                   />
-                </View>
+                </TouchableOpacity>
 
                 {/* Resend Action */}
                 <View style={styles.resendContainer}>
@@ -734,51 +788,51 @@ const RegisterScreen: React.FC = () => {
               </View>
             )}
           </Animated.View>
+
+          {/* Action Footer - Positioned inside ScrollView so it is ALWAYS visible and accessible with keyboard open */}
+          <View style={styles.bottomBarInline}>
+            {currentStep < TOTAL_STEPS ? (
+              <TouchableOpacity
+                style={styles.continueBtn}
+                onPress={handleNextStep}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.continueBtnText}>Continue →</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.continueBtn,
+                  (isLoading || otp.length < 6) && styles.continueBtnDisabled,
+                ]}
+                onPress={handleCompleteRegistrationWithOtp}
+                disabled={isLoading || otp.length < 6}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.continueBtnText}>
+                  {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {currentStep === 1 ? (
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Login")}
+                style={styles.switchAuthBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.switchAuthText}>
+                  Already have an account?{" "}
+                  <Text style={styles.switchAuthTextBold}>Sign In</Text>
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.termsNotice}>
+                By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
+              </Text>
+            )}
+          </View>
         </ScrollView>
-
-        {/* Pinned Bottom Action Footer - Stays 100% Rock-Solid & Never Glitches */}
-        <View style={styles.bottomBar}>
-          {currentStep < TOTAL_STEPS ? (
-            <TouchableOpacity
-              style={styles.continueBtn}
-              onPress={handleNextStep}
-              activeOpacity={0.88}
-            >
-              <Text style={styles.continueBtnText}>Continue →</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.continueBtn,
-                (isLoading || otp.length < 6) && styles.continueBtnDisabled,
-              ]}
-              onPress={handleCompleteRegistrationWithOtp}
-              disabled={isLoading || otp.length < 6}
-              activeOpacity={0.88}
-            >
-              <Text style={styles.continueBtnText}>
-                {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {currentStep === 1 ? (
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Login")}
-              style={styles.switchAuthBtn}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.switchAuthText}>
-                Already have an account?{" "}
-                <Text style={styles.switchAuthTextBold}>Sign In</Text>
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.termsNotice}>
-              By registering, you agree to Drivemate's Terms of Service & Privacy Policy.
-            </Text>
-          )}
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -864,8 +918,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 24,
-    paddingBottom: 20,
+    paddingBottom: 24,
+    justifyContent: "space-between",
   },
   stepCard: {
     marginBottom: 16,
@@ -1112,7 +1168,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: "100%",
     height: 58,
-    opacity: 0,
+    opacity: 0.01,
+    color: "transparent",
     zIndex: 10,
     fontSize: 24,
   },
@@ -1155,13 +1212,10 @@ const styles = StyleSheet.create({
     color: "#71717a",
     lineHeight: 18,
   },
-  bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === "ios" ? 16 : 20,
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderTopColor: "#f4f4f5",
+  bottomBarInline: {
+    marginTop: "auto",
+    paddingTop: 16,
+    paddingBottom: Platform.OS === "ios" ? 16 : 24,
   },
   continueBtn: {
     backgroundColor: "#09090b",

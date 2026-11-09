@@ -8,6 +8,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -231,12 +232,38 @@ const SettingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.navRow}
-            onPress={() =>
+            onPress={() => {
+              const target = userEmail.trim();
+              if (!target || !target.includes("@")) {
+                Alert.alert("Notice", "No email associated with current profile.");
+                return;
+              }
               Alert.alert(
                 "Change Password",
-                `A password reset link will be dispatched to ${userEmail || "your registered email"}.`
-              )
-            }
+                `Dispatch an official Firebase password reset link to:\n\n${target}?`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Send Reset Link",
+                    onPress: async () => {
+                      try {
+                        const res = await authAPI.forgotPassword(target);
+                        if (res.success) {
+                          Alert.alert(
+                            "Reset Email Dispatched",
+                            `A secure password reset email has been dispatched to ${target}. Please check your inbox and spam folder.`
+                          );
+                        } else {
+                          Alert.alert("Notice", res.error || "Failed to dispatch reset email.");
+                        }
+                      } catch (err: any) {
+                        Alert.alert("Error", err.message || "Failed to dispatch reset email.");
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
           >
             <View style={styles.rowInfo}>
               <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Change Password</Text>
@@ -304,6 +331,34 @@ const SettingsScreen: React.FC = () => {
             </View>
             <ChevronRightIcon size={18} color={isDarkMode ? "#9ca3af" : "#a1a1aa"} />
           </TouchableOpacity>
+        </View>
+
+        {/* Legal & Compliance Section */}
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Legal & Privacy</Text>
+        <View style={[styles.card, isDarkMode && styles.cardDark]}>
+          <TouchableOpacity
+            style={styles.navRow}
+            onPress={() => Linking.openURL("https://drivemate-fq3q.onrender.com/privacy")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowInfo}>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>Privacy Policy</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>
+                Review how Drivemate collects and protects your data
+              </Text>
+            </View>
+            <ChevronRightIcon size={18} color={isDarkMode ? "#9ca3af" : "#a1a1aa"} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, isDarkMode && styles.dividerDark]} />
+
+          <View style={styles.row}>
+            <View style={styles.rowInfo}>
+              <Text style={[styles.rowLabel, isDarkMode && styles.textDark]}>App Version</Text>
+              <Text style={[styles.rowSub, isDarkMode && styles.subTextDark]}>v7.0.8 (Build 211)</Text>
+            </View>
+            <Text style={[styles.unitToggleText, isDarkMode && styles.textDark, { fontWeight: "700" }]}>Production</Text>
+          </View>
         </View>
 
         {/* Danger Zone / Delete Account */}

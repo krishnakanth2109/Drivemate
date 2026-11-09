@@ -268,6 +268,17 @@ export const authAPI = {
   },
 
   /**
+   * Request native Firebase Password Reset email dispatch
+   */
+  async forgotPassword(email: string) {
+    return await request("/auth/forgot-password", {
+      method: "POST",
+      requiresAuth: false,
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
    * Sign in with email and password
    */
   async login(email: string, password: string) {
