@@ -33,7 +33,7 @@ import { authAPI } from "../../services/api";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "Register">;
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -237,9 +237,9 @@ const RegisterScreen: React.FC = () => {
           Alert.alert("Weak Password", "Password must be at least 6 characters.");
           return;
         }
-        // Send OTP when progressing to final Step 7
-        dispatchOtp();
-        break;
+        // Direct Firebase Authentication registration (No SMTP / No OTP blockers)
+        handleCompleteRegistration();
+        return;
       default:
         break;
     }
@@ -263,13 +263,7 @@ const RegisterScreen: React.FC = () => {
     Alert.alert("Code Sent", `A fresh 6-digit OTP code has been dispatched to ${email || phoneNumber}.`);
   };
 
-  const handleCompleteRegistrationWithOtp = async () => {
-    const cleanOtp = otp.trim();
-    if (!cleanOtp || cleanOtp.length < 6) {
-      Alert.alert("OTP Required", "Please enter the complete 6-digit verification code.");
-      return;
-    }
-
+  const handleCompleteRegistration = async () => {
     const payload = {
       fullName: fullName.trim(),
       email: email.trim(),
@@ -278,27 +272,39 @@ const RegisterScreen: React.FC = () => {
       vehicleType: vehicleType,
       drivingStyle: drivingStyle,
       password: password.trim(),
-      otp: cleanOtp,
     };
 
-    console.log("📝 [RegisterScreen Complete] Submitting full registration payload:", payload);
+    console.log("🔥 [RegisterScreen Firebase Auth] Registering user:", {
+      email: payload.email,
+      fullName: payload.fullName,
+      username: payload.username,
+    });
 
     setIsLoading(true);
     try {
       const response = await authAPI.register(payload);
       setIsLoading(false);
 
-      console.log("📝 [RegisterScreen Complete] Response:", response);
+      console.log("🔥 [RegisterScreen Firebase Auth] Response:", response);
 
       if (response.success) {
-        navigation.replace("Dashboard");
+        Alert.alert(
+          "Welcome to Drivemate!",
+          `Your Firebase driver account has been created. A verification link has been sent to ${payload.email}.`,
+          [
+            {
+              text: "Launch Drivemate",
+              onPress: () => navigation.replace("Dashboard"),
+            },
+          ]
+        );
       } else {
         Alert.alert("Registration Failed", response.error || "Unable to complete registration.");
       }
     } catch (err: any) {
       setIsLoading(false);
-      console.error("❌ [RegisterScreen Complete] Registration Error:", err);
-      Alert.alert("Error", err.message || "Failed to connect to verification server.");
+      console.error("❌ [RegisterScreen Firebase Auth] Registration Error:", err);
+      Alert.alert("Error", err.message || "Failed to connect to authentication server.");
     }
   };
 
@@ -667,7 +673,7 @@ const RegisterScreen: React.FC = () => {
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     returnKeyType="done"
-                    onSubmitEditing={handleNextStep}
+                    onSubmitEditing={handleCompleteRegistration}
                     onFocus={() => handleInputFocus("confirmPass")}
                     onBlur={() => setFocusedField(null)}
                   />
@@ -803,14 +809,14 @@ const RegisterScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.continueBtn,
-                  (isLoading || otp.length < 6) && styles.continueBtnDisabled,
+                  isLoading && styles.continueBtnDisabled,
                 ]}
-                onPress={handleCompleteRegistrationWithOtp}
-                disabled={isLoading || otp.length < 6}
+                onPress={handleCompleteRegistration}
+                disabled={isLoading}
                 activeOpacity={0.88}
               >
                 <Text style={styles.continueBtnText}>
-                  {isLoading ? "Verifying OTP..." : "Verify OTP & Launch Drivemate →"}
+                  {isLoading ? "Creating Firebase Account..." : "Create Account & Launch Drivemate →"}
                 </Text>
               </TouchableOpacity>
             )}

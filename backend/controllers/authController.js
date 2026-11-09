@@ -8,6 +8,15 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+// Helper to normalize phone numbers to E.164 international format
+const formatE164Phone = (phone) => {
+  if (!phone) return '';
+  const digits = String(phone).replace(/[^0-9+]/g, '');
+  if (digits.startsWith('+')) return digits;
+  if (digits.length === 10) return `+91${digits}`; // Standard 10-digit default to +91
+  return `+${digits}`;
+};
+
 // OTP In-Memory Store with 10-minute validity
 const otpStore = new Map();
 
@@ -26,9 +35,44 @@ export const sendOtp = async (req, res) => {
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    otpStore.set(key, { code: generatedOtp, expiresAt });
+    let sessionInfo = null;
+    let formattedPhone = '';
+
+    // If mobile number provided, trigger Firebase Phone Auth SMS via Google Identity Toolkit
     if (phoneNumber) {
-      otpStore.set(phoneNumber.trim(), { code: generatedOtp, expiresAt });
+      formattedPhone = formatE164Phone(phoneNumber);
+      const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+      try {
+        console.log(`📲 [Firebase Phone Auth] Requesting SMS verification code for ${formattedPhone}...`);
+        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: formattedPhone }),
+        });
+        const fbData = await fbRes.json();
+        if (fbRes.ok && fbData.sessionInfo) {
+          sessionInfo = fbData.sessionInfo;
+          console.log(`✅ [Firebase Phone Auth] SMS verification code sent via Google servers. sessionInfo: ${sessionInfo.substring(0, 25)}...`);
+        } else {
+          console.warn(`⚠️ [Firebase Phone Auth] sendVerificationCode notice: ${fbData?.error?.message || fbRes.status}`);
+        }
+      } catch (err) {
+        console.warn(`⚠️ [Firebase Phone Auth] Network error: ${err.message}`);
+      }
+    }
+
+    const otpData = {
+      code: generatedOtp,
+      sessionInfo,
+      expiresAt,
+      phoneNumber: formattedPhone || phoneNumber,
+      email: email ? email.trim().toLowerCase() : null,
+    };
+
+    otpStore.set(key, otpData);
+    if (phoneNumber) {
+      otpStore.set(phoneNumber.trim(), otpData);
+      if (formattedPhone) otpStore.set(formattedPhone, otpData);
     }
 
     console.log(`📲 [OTP Dispatch] Generated 6-digit OTP "${generatedOtp}" for ${key} (Expires in 10m)`);
@@ -45,6 +89,7 @@ export const sendOtp = async (req, res) => {
       success: true,
       message: `Verification code sent to ${key}.`,
       target: key,
+      sessionInfo: sessionInfo || undefined,
       devOtp: generatedOtp,
       expiresInSeconds: 600,
     });
@@ -58,7 +103,7 @@ export const sendOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   try {
-    const { email, phoneNumber, otp } = req.body;
+    const { email, phoneNumber, otp, sessionInfo: clientSessionInfo } = req.body;
     if (!otp) {
       return res.status(400).json({
         success: false,
@@ -67,11 +112,40 @@ export const verifyOtp = async (req, res) => {
     }
 
     const cleanOtp = String(otp).trim();
+    const formattedPhone = phoneNumber ? formatE164Phone(phoneNumber) : '';
     const key = (email || phoneNumber || '').toLowerCase().trim();
-    const stored = otpStore.get(key) || (phoneNumber ? otpStore.get(phoneNumber.trim()) : null);
+    const stored = otpStore.get(key) || 
+                   (phoneNumber ? otpStore.get(phoneNumber.trim()) : null) ||
+                   (formattedPhone ? otpStore.get(formattedPhone) : null);
 
-    // Accept master dev OTP '123456' or matching active OTP
-    const isValid = cleanOtp === '123456' || (stored && stored.code === cleanOtp && stored.expiresAt > Date.now());
+    // 1. Accept master dev/test OTP '123456' or matching in-memory code
+    let isValid = cleanOtp === '123456' || (stored && stored.code === cleanOtp && stored.expiresAt > Date.now());
+
+    // 2. If not matched in-memory, verify against Google Firebase Phone Auth using sessionInfo
+    const activeSessionInfo = clientSessionInfo || stored?.sessionInfo;
+    if (!isValid && activeSessionInfo) {
+      try {
+        const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+        console.log(`📲 [Firebase Phone Auth] Verifying OTP code with Google Identity Toolkit...`);
+        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionInfo: activeSessionInfo,
+            code: cleanOtp,
+          }),
+        });
+        const fbData = await fbRes.json();
+        if (fbRes.ok && fbData.idToken) {
+          console.log(`✅ [Firebase Phone Auth] Google verified phone OTP successfully! User UID: ${fbData.localId}`);
+          isValid = true;
+        } else {
+          console.warn(`⚠️ [Firebase Phone Auth] Verification failed: ${fbData?.error?.message}`);
+        }
+      } catch (fbErr) {
+        console.warn(`⚠️ [Firebase Phone Auth] Verification error: ${fbErr.message}`);
+      }
+    }
 
     if (!isValid) {
       return res.status(400).json({
@@ -110,9 +184,32 @@ export const register = async (req, res) => {
 
     if (otp) {
       const cleanOtp = String(otp).trim();
+      const formattedPhone = phoneNumber ? formatE164Phone(phoneNumber) : '';
       const key = (email || phoneNumber || '').toLowerCase().trim();
-      const stored = otpStore.get(key) || (phoneNumber ? otpStore.get(phoneNumber.trim()) : null);
-      const isOtpValid = cleanOtp === '123456' || (stored && stored.code === cleanOtp && stored.expiresAt > Date.now());
+      const stored = otpStore.get(key) || 
+                     (phoneNumber ? otpStore.get(phoneNumber.trim()) : null) ||
+                     (formattedPhone ? otpStore.get(formattedPhone) : null);
+
+      let isOtpValid = cleanOtp === '123456' || (stored && stored.code === cleanOtp && stored.expiresAt > Date.now());
+
+      const activeSessionInfo = req.body.sessionInfo || stored?.sessionInfo;
+      if (!isOtpValid && activeSessionInfo) {
+        try {
+          const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+          const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionInfo: activeSessionInfo,
+              code: cleanOtp,
+            }),
+          });
+          const fbData = await fbRes.json();
+          if (fbRes.ok && fbData.idToken) {
+            isOtpValid = true;
+          }
+        } catch (_) {}
+      }
 
       if (!isOtpValid) {
         return res.status(400).json({
@@ -122,6 +219,7 @@ export const register = async (req, res) => {
       }
       otpStore.delete(key);
       if (phoneNumber) otpStore.delete(phoneNumber.trim());
+      if (formattedPhone) otpStore.delete(formattedPhone);
     }
 
     if (!email || !password) {
@@ -160,6 +258,28 @@ export const register = async (req, res) => {
 
         fbUserRecord = await auth.createUser(createPayload);
         uid = fbUserRecord.uid;
+
+        // Native Firebase Email Verification (Dispatched from Google's servers - No SMTP needed)
+        try {
+          const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+          const customToken = await auth.createCustomToken(uid);
+          const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+          });
+          const signInData = await signInRes.json();
+          if (signInData.idToken) {
+            await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken: signInData.idToken }),
+            });
+            console.log(`🔥 [Firebase Auth] Native verification email dispatched to: ${normalizedEmail}`);
+          }
+        } catch (vErr) {
+          console.warn(`[Firebase Auth] Native verification dispatch notice: ${vErr.message}`);
+        }
       } catch (fbErr) {
         if (fbErr.code === 'auth/email-already-exists') {
           // If already in Firebase, retrieve UID so user isn't locked out
