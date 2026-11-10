@@ -135,6 +135,51 @@ class DataStore {
     return null;
   }
 
+  async getUserByPhone(phoneNumber) {
+    if (!phoneNumber) return null;
+    const cleanDigits = String(phoneNumber).replace(/[^0-9]/g, '');
+    const cleanTrimmed = String(phoneNumber).trim();
+    const formatted = cleanDigits.length === 10 ? `+91${cleanDigits}` : (cleanTrimmed.startsWith('+') ? cleanTrimmed : `+${cleanDigits}`);
+
+    // 1. Try MongoDB Atlas
+    if (this.isMongoReady()) {
+      try {
+        const userDoc = await User.findOne({
+          $or: [
+            { phoneNumber: cleanTrimmed },
+            { phoneNumber: formatted },
+            { phoneNumber: cleanDigits },
+          ],
+        }).lean();
+        if (userDoc) return userDoc;
+      } catch (err) {
+        console.warn(`[MongoDB] getUserByPhone fallback: ${err.message}`);
+      }
+    }
+
+    // 2. Try AsyncStorage
+    const keys = await asyncStorage.getAllKeys();
+    for (const key of keys) {
+      if (key.startsWith('user:')) {
+        const raw = await asyncStorage.getItem(key);
+        if (raw) {
+          const u = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (u.phoneNumber) {
+            const uDigits = String(u.phoneNumber).replace(/[^0-9]/g, '');
+            if (
+              u.phoneNumber === cleanTrimmed ||
+              u.phoneNumber === formatted ||
+              (cleanDigits.length >= 10 && uDigits.endsWith(cleanDigits.slice(-10)))
+            ) {
+              return u;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   async saveUser(user) {
     const uid = user.uid;
     const cleanUser = {

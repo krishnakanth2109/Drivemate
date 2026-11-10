@@ -1,3 +1,4 @@
+import "./app/utils/applyGlobalFont";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -23,6 +24,12 @@ const fontAssets = {
   "PP-light": require("./assets/fonts/poppins/Poppins-Light.ttf"),
   "PP-regular": require("./assets/fonts/poppins/Poppins-Regular.ttf"),
   "PP-medium": require("./assets/fonts/poppins/Poppins-Medium.ttf"),
+  "Poppins": require("./assets/fonts/poppins/Poppins-Regular.ttf"),
+  "Poppins-Regular": require("./assets/fonts/poppins/Poppins-Regular.ttf"),
+  "Poppins-Medium": require("./assets/fonts/poppins/Poppins-Medium.ttf"),
+  "Poppins-SemiBold": require("./assets/fonts/poppins/Poppins-SemiBold.ttf"),
+  "Poppins-Bold": require("./assets/fonts/poppins/Poppins-Bold.ttf"),
+  "Poppins-Light": require("./assets/fonts/poppins/Poppins-Light.ttf"),
 };
 
 export default function App() {

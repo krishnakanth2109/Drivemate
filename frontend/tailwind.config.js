@@ -6,6 +6,12 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
+        sans: ["Poppins-Regular", "sans-serif"],
+        poppins: ["Poppins-Regular", "sans-serif"],
+        "poppins-bold": ["Poppins-Bold", "sans-serif"],
+        "poppins-semibold": ["Poppins-SemiBold", "sans-serif"],
+        "poppins-medium": ["Poppins-Medium", "sans-serif"],
+        "poppins-light": ["Poppins-Light", "sans-serif"],
         rubik: ["Rubik-Regular", "sans-serif"],
         "rubik-bold": ["Rubik-Bold", "sans-serif"],
         "rubik-extrabold": ["Rubik-ExtraBold", "sans-serif"],

@@ -92,8 +92,8 @@ android {
         applicationId 'com.drivemate.live'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 211
-        versionName "7.0.8"
+        versionCode 1
+        versionName "1.0.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,6 +104,8 @@ android {
                 storePassword DRIVEMATE_UPLOAD_STORE_PASSWORD
                 keyAlias DRIVEMATE_UPLOAD_KEY_ALIAS
                 keyPassword DRIVEMATE_UPLOAD_KEY_PASSWORD
+                v1SigningEnabled true
+                v2SigningEnabled true
             }
         }
         debug {

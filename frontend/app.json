@@ -2,7 +2,7 @@
   "expo": {
     "name": "Drivemate",
     "slug": "drivemate",
-    "version": "7.0.8",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/App_icon.png",
     "scheme": "drivemate",
@@ -20,23 +20,22 @@
         ]
       },
       "bundleIdentifier": "com.drivemate.live",
-      "version": "7.0.8",
-      "buildNumber": "211"
+      "version": "1.0.1",
+      "buildNumber": "1"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 211,
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/App_icon.png",
         "backgroundColor": "#050831"
       },
       "permissions": [
         "android.permission.INTERNET",
+        "android.permission.VIBRATE",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.CAMERA"
       ],
       "package": "com.drivemate.live"
     },

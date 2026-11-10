@@ -12,6 +12,8 @@ import {
   Platform,
   Image,
   Share,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import {
   PlusIcon,
@@ -24,6 +26,9 @@ import {
   UserIcon,
   CheckCircleIcon,
   TrashIcon,
+  ShieldIcon,
+  CarIcon,
+  MailIcon,
 } from "../../../components/Icons";
 import { PostItem } from "../../../components/CreatePostModal";
 import { messagesAPI, DriverProfile } from "../../../services/api";
@@ -61,6 +66,19 @@ const HomeTab: React.FC<HomeTabProps> = ({
   const [driversList, setDriversList] = useState<DriverProfile[]>([]);
   const [connections, setConnections] = useState<any[]>([]);
   const [zoomPhotoUrl, setZoomPhotoUrl] = useState<string | null>(null);
+
+  // Message & Connection Popup Modal State
+  const [messageModalTarget, setMessageModalTarget] = useState<{
+    driver: DriverProfile;
+    post: PostItem;
+    existingRoomId?: string;
+    isPending?: boolean;
+    isAccepted?: boolean;
+  } | null>(null);
+  const [isMessagePopupVisible, setIsMessagePopupVisible] = useState(false);
+  const [customIntroMessage, setCustomIntroMessage] = useState("");
+  const [isSendingMessageInvite, setIsSendingMessageInvite] = useState(false);
+  const [sentInviteSuccess, setSentInviteSuccess] = useState(false);
 
   // Refresh discoverable drivers & connection statuses
   const refreshDrivers = async () => {
@@ -187,22 +205,17 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
   const handleSendConnectionRequest = async () => {
     if (!selectedDriver) return;
-    Alert.alert(
-      "Send Connection Request?",
-      `You must send a connection request to ${selectedDriver.fullName} (@${selectedDriver.username}) first. Once they accept, you will be able to message them directly.\n\nSend connection request now?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send Request",
-          onPress: async () => {
-            await sendInviteToDriver(selectedDriver);
-            setSelectedDriver((prev) =>
-              prev ? { ...prev, connectionStatus: "pending", isSender: true } : null
-            );
-          },
-        },
-      ]
-    );
+    setIsDriverModalVisible(false);
+    setMessageModalTarget({
+      driver: selectedDriver,
+      post: selectedPost || ({} as any),
+      isPending: selectedDriver.connectionStatus === "pending",
+      isAccepted: false,
+    });
+    const firstWord = selectedDriver.fullName.split(" ")[0] || "Driver";
+    setCustomIntroMessage(`Hi ${firstWord}! I would love to connect with you on Drivemate.`);
+    setSentInviteSuccess(false);
+    setIsMessagePopupVisible(true);
   };
 
   const handleTapMessageOnPost = (post: PostItem) => {
@@ -275,44 +288,62 @@ const HomeTab: React.FC<HomeTabProps> = ({
       return;
     }
 
-    // 5. If connection request is already pending, alert user
-    if (effectiveStatus === "pending") {
-      Alert.alert(
-        "Request Pending Approval",
-        `Your connection request to ${targetName} (${targetTag}) is currently pending approval. Once they accept your invitation, direct messaging will be unlocked.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "View Profile",
-            onPress: () => handleOpenDriverProfile(post),
-          },
-          {
-            text: "View Requests",
-            onPress: () => onNavigateTab && onNavigateTab("messaging", "requests"),
-          },
-        ]
-      );
-      return;
-    }
+    // 5. Open the custom Message & Connection Popup Modal
+    setMessageModalTarget({
+      driver: driverData,
+      post,
+      existingRoomId: existingConn?.roomId,
+      isPending: effectiveStatus === "pending",
+      isAccepted: false,
+    });
 
-    // 6. If not connected yet: prompt user directly to send invitation request or view profile
-    Alert.alert(
-      `Message ${targetName}?`,
-      `To message ${targetName} (${targetTag}), you must send a connection request first. Once they accept your invitation, direct messaging will be unlocked.\n\nSend invitation request now?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "View Profile",
-          onPress: () => handleOpenDriverProfile(post),
-        },
-        {
-          text: "Send Request",
-          onPress: async () => {
-            await sendInviteToDriver(driverData);
-          },
-        },
-      ]
-    );
+    const firstWord = targetName.split(" ")[0] || "Driver";
+    const defaultIntro = `Hi ${firstWord}! I saw your post regarding ${post.fromCity || "the route"} ➔ ${post.toCity || "your trip"} on Drivemate and would love to connect.`;
+    setCustomIntroMessage(defaultIntro);
+    setSentInviteSuccess(false);
+    setIsMessagePopupVisible(true);
+  };
+
+  const handleSendMessageInviteFromPopup = async () => {
+    if (!messageModalTarget) return;
+    setIsSendingMessageInvite(true);
+    try {
+      const res = await messagesAPI.sendRequest(
+        messageModalTarget.driver.uid,
+        messageModalTarget.driver.fullName,
+        `@${messageModalTarget.driver.username}`
+      );
+
+      if (res.success) {
+        setDriversList((prev) => {
+          const exists = prev.some((d) => d.uid === messageModalTarget.driver.uid);
+          if (exists) {
+            return prev.map((d) =>
+              d.uid === messageModalTarget.driver.uid
+                ? { ...d, connectionStatus: "pending", isSender: true }
+                : d
+            );
+          }
+          return [
+            ...prev,
+            { ...messageModalTarget.driver, connectionStatus: "pending", isSender: true },
+          ];
+        });
+
+        if (res.connection) {
+          setConnections((prev) => [res.connection, ...prev]);
+        }
+
+        refreshDrivers();
+        setSentInviteSuccess(true);
+      } else {
+        Alert.alert("Unable to send", res.error || "Please try again later.");
+      }
+    } catch (err: any) {
+      Alert.alert("Network Error", err.message || "Failed to dispatch connection request.");
+    } finally {
+      setIsSendingMessageInvite(false);
+    }
   };
 
   const handleGoToMessaging = () => {
@@ -857,6 +888,290 @@ const HomeTab: React.FC<HomeTabProps> = ({
             )}
           </View>
         </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* MAGNIFICENT MESSAGE & DRIVER CONNECTION POPUP MODAL     */}
+      {/* ======================================================== */}
+      <Modal
+        visible={isMessagePopupVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsMessagePopupVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.msgModalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.msgModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsMessagePopupVisible(false)}
+          />
+
+          <View style={styles.msgModalContainer}>
+            {/* Top Indicator Drag Bar */}
+            <View style={styles.msgModalHeaderBar}>
+              <View style={styles.msgDragIndicator} />
+              <TouchableOpacity
+                style={styles.msgCloseBtn}
+                onPress={() => setIsMessagePopupVisible(false)}
+                activeOpacity={0.7}
+              >
+                <CloseIcon size={16} color="#71717a" />
+              </TouchableOpacity>
+            </View>
+
+            {messageModalTarget && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.msgModalScrollContent}
+              >
+                {/* SUCCESS CONFIRMATION STATE */}
+                {sentInviteSuccess ? (
+                  <View style={styles.msgSuccessContainer}>
+                    <View style={styles.msgSuccessIconCircle}>
+                      <CheckCircleIcon size={36} color="#16a34a" />
+                    </View>
+                    <Text style={styles.msgSuccessTitle}>Connection Dispatched!</Text>
+                    <Text style={styles.msgSuccessSubtitle}>
+                      Your invitation and message have been sent to{" "}
+                      <Text style={{ fontWeight: "700", color: "#09090b" }}>
+                        {messageModalTarget.driver.fullName}
+                      </Text>
+                      . Direct 1-on-1 messaging will unlock automatically as soon as they accept.
+                    </Text>
+
+                    <View style={styles.msgSuccessBadgesRow}>
+                      <View style={styles.msgSuccessPill}>
+                        <CheckCircleIcon size={12} color="#16a34a" />
+                        <Text style={styles.msgSuccessPillText}>Push Alert Sent</Text>
+                      </View>
+                      <View style={styles.msgSuccessPill}>
+                        <MailIcon size={12} color="#16a34a" />
+                        <Text style={styles.msgSuccessPillText}>Email Notification</Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.msgDoneBtn}
+                      onPress={() => setIsMessagePopupVisible(false)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.msgDoneBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    {/* DRIVER IDENTITY HERO CARD */}
+                    <View style={styles.msgDriverHeroCard}>
+                      <View style={styles.msgAvatarWrapper}>
+                        {messageModalTarget.driver.photoUrl || messageModalTarget.driver.profilePicture ? (
+                          <Image
+                            source={{
+                              uri:
+                                messageModalTarget.driver.photoUrl ||
+                                messageModalTarget.driver.profilePicture,
+                            }}
+                            style={styles.msgBigAvatar}
+                          />
+                        ) : (
+                          <View style={styles.msgBigAvatarFallback}>
+                            <Text style={styles.msgBigAvatarText}>
+                              {messageModalTarget.driver.fullName.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.msgOnlineBadge}>
+                          <CheckCircleIcon size={14} color="#16a34a" />
+                        </View>
+                      </View>
+
+                      <View style={styles.msgDriverDetails}>
+                        <View style={styles.msgNameRow}>
+                          <Text style={styles.msgDriverName} numberOfLines={1}>
+                            {messageModalTarget.driver.fullName}
+                          </Text>
+                          <View style={styles.msgVerifiedPill}>
+                            <ShieldIcon size={11} color="#09090b" />
+                            <Text style={styles.msgVerifiedPillText}>VERIFIED</Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.msgDriverTag}>
+                          @{messageModalTarget.driver.username}
+                        </Text>
+
+                        <View style={styles.msgQuickStatsRow}>
+                          <Text style={styles.msgStatPill}>⭐ 4.9 Rating</Text>
+                          <Text style={styles.msgStatDot}>•</Text>
+                          <Text style={styles.msgStatPill}>⚡ &lt; 5m replies</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* TRIP ROUTE CONTEXT CARD */}
+                    {(messageModalTarget.post.fromCity || messageModalTarget.post.toCity) && (
+                      <View style={styles.msgRouteCard}>
+                        <View style={styles.msgRouteHeader}>
+                          <View style={styles.msgRouteBadge}>
+                            <CarIcon size={12} color="#09090b" />
+                            <Text style={styles.msgRouteBadgeText}>COMMUNITY TRIP</Text>
+                          </View>
+                          {messageModalTarget.post.pricePerSeat && (
+                            <Text style={styles.msgRoutePrice}>
+                              {messageModalTarget.post.pricePerSeat}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={styles.msgRoutePathRow}>
+                          <Text style={styles.msgRouteCity}>
+                            {messageModalTarget.post.fromCity || "Departure"}
+                          </Text>
+                          <Text style={styles.msgRouteArrow}>➔</Text>
+                          <Text style={styles.msgRouteCity}>
+                            {messageModalTarget.post.toCity || "Destination"}
+                          </Text>
+                        </View>
+
+                        {(messageModalTarget.post.departureTime || messageModalTarget.post.availableSeats) && (
+                          <View style={styles.msgRouteMetaRow}>
+                            {messageModalTarget.post.departureTime && (
+                              <Text style={styles.msgRouteMetaItem}>
+                                🕒 {messageModalTarget.post.departureTime}
+                              </Text>
+                            )}
+                            {messageModalTarget.post.availableSeats && (
+                              <Text style={styles.msgRouteMetaItem}>
+                                👥 {messageModalTarget.post.availableSeats} Seats Open
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* PENDING APPROVAL NOTICE IF ALREADY PENDING */}
+                    {messageModalTarget.isPending ? (
+                      <View style={styles.msgPendingCard}>
+                        <View style={styles.msgPendingHeader}>
+                          <Text style={styles.msgPendingIcon}>⏳</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.msgPendingTitle}>
+                              Invitation Pending Approval
+                            </Text>
+                            <Text style={styles.msgPendingDesc}>
+                              You've already sent a connection invite to{" "}
+                              {messageModalTarget.driver.fullName}. Once they tap accept, direct 1-on-1 driver comms will activate immediately.
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.msgPendingActionsRow}>
+                          <TouchableOpacity
+                            style={styles.msgViewRequestsBtn}
+                            onPress={() => {
+                              setIsMessagePopupVisible(false);
+                              if (onNavigateTab) {
+                                onNavigateTab("messaging", "requests");
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.msgViewRequestsBtnText}>
+                              View in Requests Tab →
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        {/* MESSAGE COMPOSER SECTION */}
+                        <View style={styles.msgComposerSection}>
+                          <View style={styles.msgComposerHeader}>
+                            <Text style={styles.msgComposerLabel}>Introductory Message</Text>
+                            <Text style={styles.msgCharCount}>
+                              {customIntroMessage.length}/160
+                            </Text>
+                          </View>
+
+                          <View style={styles.msgInputBox}>
+                            <TextInput
+                              style={styles.msgTextInput}
+                              placeholder="Type an introductory message..."
+                              placeholderTextColor="#a1a1aa"
+                              value={customIntroMessage}
+                              onChangeText={(t) => setCustomIntroMessage(t.slice(0, 160))}
+                              multiline
+                              numberOfLines={3}
+                              textAlignVertical="top"
+                            />
+                          </View>
+
+                          {/* QUICK SUGGESTION CHIPS */}
+                          <Text style={styles.msgQuickChipsLabel}>Quick suggestions:</Text>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.msgChipsScroll}
+                          >
+                            {[
+                              "🚗 Are seats still available?",
+                              "📍 Where is the exact pickup?",
+                              "🕒 Is departure time flexible?",
+                              "👋 Can we connect on this trip?",
+                            ].map((chip, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                style={styles.msgChipBtn}
+                                onPress={() => setCustomIntroMessage(chip)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.msgChipText}>{chip}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                        {/* SEND ACTION BUTTON */}
+                        <TouchableOpacity
+                          style={[
+                            styles.msgPrimarySendBtn,
+                            isSendingMessageInvite && styles.btnDisabled,
+                          ]}
+                          onPress={handleSendMessageInviteFromPopup}
+                          disabled={isSendingMessageInvite}
+                          activeOpacity={0.88}
+                        >
+                          {isSendingMessageInvite ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                          ) : (
+                            <>
+                              <MessageIcon size={18} color="#ffffff" />
+                              <Text style={styles.msgPrimarySendBtnText}>
+                                Send Message & Connection
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </>
+                    )}
+
+                    {/* TRUST & PRIVACY FOOTER */}
+                    <View style={styles.msgTrustFooter}>
+                      <ShieldIcon size={13} color="#71717a" />
+                      <Text style={styles.msgTrustFooterText}>
+                        End-to-end encrypted driver communications • Zero spam policy
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Fullscreen Photo Viewer Modal */}
@@ -1534,5 +1849,427 @@ const styles = StyleSheet.create({
   zoomImage: {
     width: "100%",
     height: "100%",
+  },
+
+  /* Magnificent Message & Connection Popup Styles */
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  msgModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  msgModalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(9, 9, 11, 0.65)",
+  },
+  msgModalContainer: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    maxHeight: "90%",
+    paddingBottom: Platform.OS === "ios" ? 34 : 24,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  msgModalHeaderBar: {
+    alignItems: "center",
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    position: "relative",
+  },
+  msgDragIndicator: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#e4e4e7",
+  },
+  msgCloseBtn: {
+    position: "absolute",
+    right: 18,
+    top: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  msgModalScrollContent: {
+    paddingHorizontal: 22,
+    paddingBottom: 24,
+  },
+  msgDriverHeroCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fafafa",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    marginBottom: 16,
+    gap: 14,
+  },
+  msgAvatarWrapper: {
+    position: "relative",
+  },
+  msgBigAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#ffffff",
+  },
+  msgBigAvatarFallback: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#09090b",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#ffffff",
+  },
+  msgBigAvatarText: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  msgOnlineBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    padding: 1.5,
+  },
+  msgDriverDetails: {
+    flex: 1,
+  },
+  msgNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 2,
+    flexWrap: "wrap",
+  },
+  msgDriverName: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#09090b",
+    letterSpacing: -0.3,
+  },
+  msgVerifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f4f4f5",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+  },
+  msgVerifiedPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#09090b",
+    letterSpacing: 0.5,
+  },
+  msgDriverTag: {
+    fontSize: 12,
+    color: "#71717a",
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  msgQuickStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  msgStatPill: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#52525b",
+  },
+  msgStatDot: {
+    fontSize: 11,
+    color: "#a1a1aa",
+  },
+  msgRouteCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  msgRouteHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  msgRouteBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#f4f4f5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  msgRouteBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#09090b",
+    letterSpacing: 0.4,
+  },
+  msgRoutePrice: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#16a34a",
+  },
+  msgRoutePathRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  msgRouteCity: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  msgRouteArrow: {
+    fontSize: 14,
+    color: "#a1a1aa",
+    fontWeight: "700",
+  },
+  msgRouteMetaRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: "#f4f4f5",
+  },
+  msgRouteMetaItem: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#71717a",
+  },
+  msgComposerSection: {
+    marginBottom: 16,
+  },
+  msgComposerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  msgComposerLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#09090b",
+  },
+  msgCharCount: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    fontWeight: "600",
+  },
+  msgInputBox: {
+    backgroundColor: "#fafafa",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 88,
+    marginBottom: 12,
+  },
+  msgTextInput: {
+    fontSize: 14,
+    color: "#09090b",
+    lineHeight: 20,
+    padding: 0,
+  },
+  msgQuickChipsLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#71717a",
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  msgChipsScroll: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  msgChipBtn: {
+    backgroundColor: "#f4f4f5",
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  msgChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#3f3f46",
+  },
+  msgPrimarySendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#09090b",
+    height: 52,
+    borderRadius: 16,
+    marginBottom: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  msgPrimarySendBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: -0.2,
+  },
+  msgPendingCard: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#fde68a",
+    padding: 16,
+    marginBottom: 16,
+  },
+  msgPendingHeader: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  msgPendingIcon: {
+    fontSize: 22,
+  },
+  msgPendingTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#92400e",
+    marginBottom: 4,
+  },
+  msgPendingDesc: {
+    fontSize: 12,
+    color: "#b45309",
+    lineHeight: 18,
+  },
+  msgPendingActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  msgViewRequestsBtn: {
+    flex: 1,
+    backgroundColor: "#92400e",
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  msgViewRequestsBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  msgSuccessContainer: {
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+  },
+  msgSuccessIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#dcfce7",
+    borderWidth: 2,
+    borderColor: "#86efac",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  msgSuccessTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#09090b",
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  msgSuccessSubtitle: {
+    fontSize: 13,
+    color: "#52525b",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  msgSuccessBadgesRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 24,
+  },
+  msgSuccessPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  msgSuccessPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  msgDoneBtn: {
+    width: "100%",
+    backgroundColor: "#09090b",
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  msgDoneBtnText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  msgTrustFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingTop: 4,
+  },
+  msgTrustFooterText: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    fontWeight: "500",
   },
 });

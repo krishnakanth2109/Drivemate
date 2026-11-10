@@ -299,6 +299,31 @@ export const authAPI = {
   },
 
   /**
+   * Sign in / Authenticate with OTP (Phone or Email)
+   */
+  async loginWithOtp(params: {
+    phoneNumber?: string;
+    email?: string;
+    otp: string;
+    sessionInfo?: string;
+  }) {
+    const res = await request<{ token: string; user: StoredUserProfile }>(
+      "/auth/login-otp",
+      {
+        method: "POST",
+        requiresAuth: false,
+        body: JSON.stringify(params),
+      }
+    );
+
+    if (res.success && res.token && res.user) {
+      await saveAuthToken(res.token);
+      await saveUserProfile(res.user);
+    }
+    return res;
+  },
+
+  /**
    * Authenticate / Login with Google account
    */
   async googleLogin(params: {

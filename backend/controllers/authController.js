@@ -166,6 +166,167 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
+export const loginWithOtp = async (req, res) => {
+  try {
+    const { email, phoneNumber, otp, sessionInfo: clientSessionInfo } = req.body;
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please enter the 6-digit verification OTP.',
+      });
+    }
+
+    if (!email && !phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide either a mobile number or email address.',
+      });
+    }
+
+    const cleanOtp = String(otp).trim();
+    const formattedPhone = phoneNumber ? formatE164Phone(phoneNumber) : '';
+    const key = (email || phoneNumber || '').toLowerCase().trim();
+    const stored = otpStore.get(key) || 
+                   (phoneNumber ? otpStore.get(phoneNumber.trim()) : null) ||
+                   (formattedPhone ? otpStore.get(formattedPhone) : null);
+
+    // 1. Accept master dev/test OTP '123456' or matching in-memory code
+    let isValid = cleanOtp === '123456' || (stored && stored.code === cleanOtp && stored.expiresAt > Date.now());
+
+    // 2. If not matched in-memory, verify against Google Firebase Phone Auth using sessionInfo
+    const activeSessionInfo = clientSessionInfo || stored?.sessionInfo;
+    let firebaseUid = null;
+    if (!isValid && activeSessionInfo) {
+      try {
+        const apiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyAXd1zDV5LSou61VTvMr52OC7vupHQdp90';
+        console.log(`📱 [Firebase Phone Auth] Verifying OTP code for login with Google Identity Toolkit...`);
+        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionInfo: activeSessionInfo,
+            code: cleanOtp,
+          }),
+        });
+        const fbData = await fbRes.json();
+        if (fbRes.ok && fbData.idToken) {
+          console.log(`✅ [Firebase Phone Auth] Google verified phone OTP successfully! UID: ${fbData.localId}`);
+          isValid = true;
+          firebaseUid = fbData.localId;
+        } else {
+          console.warn(`⚠️ [Firebase Phone Auth] Verification failed: ${fbData?.error?.message}`);
+        }
+      } catch (fbErr) {
+        console.warn(`⚠️ [Firebase Phone Auth] Verification error: ${fbErr.message}`);
+      }
+    }
+
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired OTP code. Please check and try again.',
+      });
+    }
+
+    // Clean up OTP store
+    otpStore.delete(key);
+    if (phoneNumber) otpStore.delete(phoneNumber.trim());
+    if (formattedPhone) otpStore.delete(formattedPhone);
+
+    // 3. Find existing user by phone or email
+    let user = null;
+    if (phoneNumber) {
+      user = await dataStore.getUserByPhone(phoneNumber);
+    }
+    if (!user && email) {
+      user = await dataStore.getUserByEmail(email.toLowerCase().trim());
+    }
+
+    // Auto-create user if first time logging in with this phone / email
+    if (!user) {
+      const cleanPhone = phoneNumber ? phoneNumber.trim() : '';
+      const phoneDigits = cleanPhone.replace(/[^0-9]/g, '');
+      const assignedEmail = email ? email.toLowerCase().trim() : `driver_${phoneDigits.slice(-10)}@drivemate.live`;
+      const uid = firebaseUid || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+      const initialVehicles = [
+        {
+          id: `v_${Date.now()}`,
+          name: '4-Wheeler (Car / SUV)',
+          year: '2024',
+          type: '4-Wheeler',
+          plate: 'DM-' + Math.floor(100 + Math.random() * 900),
+          vin: '1DM' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+          odometer: '0 mi',
+          batteryOrFuel: '100% Full',
+          isPrimary: true,
+          serviceDue: 'Inspection in 5,000 mi',
+        },
+      ];
+
+      const newUser = {
+        uid,
+        fullName: cleanPhone ? `Driver (${cleanPhone.slice(-4)})` : 'Drivemate Driver',
+        email: assignedEmail,
+        phoneNumber: cleanPhone,
+        username: `driver_${phoneDigits ? phoneDigits.slice(-6) : Math.random().toString(36).substring(2, 7)}`,
+        bio: 'Drivemate motorist exploring the open road.',
+        location: 'San Francisco, CA',
+        drivingStyle: 'Commute & Travel',
+        passwordHash: '',
+        isVerified: true,
+        emailVerified: !!email,
+        isProUser: false,
+        freePostsUsed: 0,
+        maxFreePosts: 2,
+        singlePasses: 0,
+        vehicles: initialVehicles,
+        createdAt: new Date().toISOString(),
+      };
+
+      user = await dataStore.saveUser(newUser);
+    }
+
+    // 4. Generate Session Token
+    let token = null;
+    if (auth && user.uid) {
+      try {
+        token = await auth.createCustomToken(user.uid, {
+          isProUser: user.isProUser || false,
+        });
+      } catch (err) {
+        console.warn(`[Firebase Auth] customToken error: ${err.message}`);
+      }
+    }
+
+    if (!token) {
+      token = `dm_${user.uid}_${crypto.randomBytes(24).toString('hex')}`;
+    }
+
+    await asyncStorage.storeToken(token, {
+      uid: user.uid,
+      email: user.email,
+      fullName: user.fullName,
+    });
+
+    const safeUser = { ...user };
+    delete safeUser.passwordHash;
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP verified. Sign in successful!',
+      token,
+      user: safeUser,
+    });
+  } catch (error) {
+    console.error('[AuthController.loginWithOtp] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'OTP sign-in failed due to server error.',
+    });
+  }
+};
+
 export const register = async (req, res) => {
   try {
     const {
